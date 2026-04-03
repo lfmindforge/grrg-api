@@ -13,20 +13,20 @@ export class User {
   @Column({ unique: true })
   email!: string;
 
-  @Column({ nullable: true })
-  password_hash!: string;
+  @Column({ type: 'varchar', nullable: true })
+  password_hash!: string | null;
 
   @Column({ unique: true, length: 50 })
   pseudo!: string;
 
   @Column({ type: 'text', nullable: true })
-  avatar_url!: string;
+  avatar_url!: string | null;
 
-  @Column({ length: 20, nullable: true })
-  oauth_provider!: string;
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  oauth_provider!: string | null;
 
-  @Column({ nullable: true })
-  oauth_id!: string;
+  @Column({ type: 'varchar', nullable: true })
+  oauth_id!: string | null;
 
   @Column({ default: 0 })
   glow_points!: number;

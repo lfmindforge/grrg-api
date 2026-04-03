@@ -13,8 +13,8 @@ import { url } from 'inspector';
       useFactory: (config: ConfigService) => ({
         type: 'postgres',
         url: config.get<string>('DATABASE_URL'),
-        entities: [],
-        migrations: [],
+        entities: [__dirname + '/**/*.entity{.ts,.js}'],
+        migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         migrationsRun: false,
         synchronize: false,
       }),
