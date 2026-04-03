@@ -19,6 +19,9 @@ export class User {
   @Column({ unique: true, length: 50 })
   pseudo!: string;
 
+  @Column({ type: 'date' })
+  birthdate!: Date;
+
   @Column({ type: 'text', nullable: true })
   avatar_url!: string | null;
 

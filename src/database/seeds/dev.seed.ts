@@ -11,12 +11,14 @@ async function seed() {
       email: 'luc@test.com',
       pseudo: 'luc',
       password_hash: null,
+      birthdate: new Date('1995-01-01'),
       grade: 'etincelle',
     },
     {
       email: 'claw@test.com',
       pseudo: 'claw',
       password_hash: null,
+      birthdate: new Date('1992-06-15'),
       grade: 'etincelle',
     },
   ];
