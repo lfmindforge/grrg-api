@@ -5,6 +5,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
 @Module({
   imports: [
@@ -21,10 +23,13 @@ import { AuthModule } from './auth/auth.module';
       }),
       inject: [ConfigService],
     }),
+    //Config global, la route login ovveride @throttle (5/10min)
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 600_000, limit: 100 }]),
     UserModule,
     AuthModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  //Application throttleGuard sur toutes les routes
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

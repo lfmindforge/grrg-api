@@ -2,10 +2,26 @@ import { Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UserModule } from '../user/user.module';
+import { ConfigModule } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { RefreshToken } from './entities/refresh-token.entity';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
-  imports: [UserModule],
+  imports: [
+    UserModule,
+    PassportModule,
+    // Les secrets sont passés dynamiquement via ConfigService dans signAsyn/verify
+    JwtModule.register({}),
+    TypeOrmModule.forFeature([RefreshToken]),
+    ConfigModule,
+  ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard],
+  //JwtAuthGuard exporté pour être utilisable dans les autres modules sans réimporter PassportModule
+  exports: [JwtAuthGuard],
 })
 export class AuthModule {}
