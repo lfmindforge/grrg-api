@@ -31,7 +31,8 @@ import { WishModule } from './wish/wish.module';
   ],
   //Application throttleGuard sur toutes les routes
   providers: [
-    { provide: APP_GUARD, useClass: ThrottlerGuard }, //Application JwtAuthGuard sur toutes les routes — les routes @Public() sont exemptées
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    //Application JwtAuthGuard sur toutes les routes — les routes @Public() sont exemptées
     { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
 })
