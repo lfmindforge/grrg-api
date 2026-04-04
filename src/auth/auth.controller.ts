@@ -1,9 +1,20 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Get,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { Throttle } from '@nestjs/throttler';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import type { Request } from 'express';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('auth')
 export class AuthController {
@@ -15,6 +26,7 @@ export class AuthController {
     return this.authService.register(dto);
   }
 
+  // Override de la limite globale (100/10min) — 5 tentatives max sur 10 minutes
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 600_000 } })
@@ -32,5 +44,33 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   logout(@Body() dto: RefreshDto) {
     return this.authService.logout(dto.refresh_token);
+  }
+
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  googleAuth() {
+    // Passport intercepte cette route et redirige vers Google — NestJS n'atteint jamais ce corps
+  }
+
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  @HttpCode(HttpStatus.OK)
+  googleCallback(@Req() req: Request) {
+    // req.user contient { access_token, refresh_token } passé par GoogleStrategy.validate()
+    return req.user;
+  }
+
+  @Get('github')
+  @UseGuards(AuthGuard('github'))
+  githubAuth() {
+    // Passport intercepte cette route et redirige vers GitHub — NestJS n'atteint jamais ce corps
+  }
+
+  @Get('github/callback')
+  @UseGuards(AuthGuard('github'))
+  @HttpCode(HttpStatus.OK)
+  githubCallback(@Req() req: Request) {
+    // req.user contient { access_token, refresh_token } passé par GitHubStrategy.validate()
+    return req.user;
   }
 }

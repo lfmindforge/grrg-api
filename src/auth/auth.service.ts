@@ -10,7 +10,7 @@ import { RegisterDto } from './dto/register.dto';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
 import { Repository } from 'typeorm';
 import { LoginDto } from './dto/login.dto';
 import { RefreshToken } from './entities/refresh-token.entity';
@@ -116,6 +116,55 @@ export class AuthService {
       return;
     }
     await this.refreshTokenRepo.delete({ id: payload.jti });
+  }
+
+  async findOrCreateOAuthUser(profile: {
+    provider: 'google' | 'github';
+    oauthId: string;
+    email: string;
+    displayName: string;
+    avatarUrl?: string | null;
+  }): Promise<{ access_token: string; refresh_token: string }> {
+    //normalise l'email car l'oauth github met une mauscule => 2 compte avec meme email possible=> pas bon.
+    const email = profile.email.toLowerCase();
+    // Cas 1 : compte OAuth déjà existant
+    const existing = await this.userService.findByOAuthId(
+      profile.provider,
+      profile.oauthId,
+    );
+    if (existing) return this.generateTokens(existing.id, existing.email);
+
+    // Cas 2 : email déjà utilisé par un compte email/mot de passe
+    const byEmail = await this.userService.findByEmail(email);
+    if (byEmail)
+      throw new ConflictException(
+        'An account already exists with this email. Please log in with your password.',
+      );
+
+    // Cas 3 : nouveau compte OAuth
+    const pseudo = this.generatePseudo(profile.displayName);
+    const user = await this.userService.create({
+      email,
+      password_hash: null,
+      pseudo,
+      birthdate: null,
+      avatar_url: profile.avatarUrl ?? null,
+      oauth_provider: profile.provider,
+      oauth_id: profile.oauthId,
+    });
+    return this.generateTokens(user.id, user.email);
+  }
+
+  // Génère un pseudo depuis le displayName OAuth avec suffixe hex pour garantir l'unicité
+  private generatePseudo(displayName: string): string {
+    const base =
+      displayName
+        .split(' ')[0]
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .slice(0, 20) || 'user';
+    const suffix = randomBytes(2).toString('hex');
+    return `${base}_${suffix}`;
   }
 
   // Génération des token + persiste le jti en DB.
