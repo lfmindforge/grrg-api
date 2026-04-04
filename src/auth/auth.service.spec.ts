@@ -21,6 +21,7 @@ describe('AuthService', () => {
     findByEmail: jest.fn(),
     findByPseudo: jest.fn(),
     create: jest.fn(),
+    findByOAuthId: jest.fn(),
   };
   const mockJwtService = { signAsync: jest.fn(), verify: jest.fn() };
   const mockConfigService = {
@@ -223,6 +224,73 @@ describe('AuthService', () => {
       });
       await expect(service.logout('bad-token')).resolves.toBeUndefined();
       expect(mockRefreshTokenRepo.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findOrCreateOAuthUser', () => {
+    const profile = {
+      provider: 'google' as const,
+      oauthId: 'google-123',
+      email: 'oauth@example.com',
+      displayName: 'Lucas Dupont',
+      avatarUrl: 'https://avatar.url/photo.jpg',
+    };
+
+    it('should return tokens for existing OAuth user', async () => {
+      mockUserService.findByOAuthId.mockResolvedValue({
+        id: 'user-id',
+        email: 'oauth@example.com',
+      });
+      mockJwtService.signAsync
+        .mockResolvedValueOnce('access-token')
+        .mockResolvedValueOnce('refresh-token');
+      mockRefreshTokenRepo.save.mockResolvedValue({});
+
+      const result = await service.findOrCreateOAuthUser(profile);
+      expect(result).toEqual({
+        access_token: 'access-token',
+        refresh_token: 'refresh-token',
+      });
+      expect(mockUserService.create).not.toHaveBeenCalled();
+    });
+
+    it('should throw ConflictException if email already used by non-OAuth account', async () => {
+      mockUserService.findByOAuthId.mockResolvedValue(null);
+      mockUserService.findByEmail.mockResolvedValue({
+        id: 'existing-id',
+        oauth_provider: null,
+      });
+
+      await expect(service.findOrCreateOAuthUser(profile)).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('should create account and return tokens for new OAuth user', async () => {
+      mockUserService.findByOAuthId.mockResolvedValue(null);
+      mockUserService.findByEmail.mockResolvedValue(null);
+      mockUserService.create.mockResolvedValue({
+        id: 'new-id',
+        email: 'oauth@example.com',
+      });
+      mockJwtService.signAsync
+        .mockResolvedValueOnce('access-token')
+        .mockResolvedValueOnce('refresh-token');
+      mockRefreshTokenRepo.save.mockResolvedValue({});
+
+      const result = await service.findOrCreateOAuthUser(profile);
+      expect(result).toEqual({
+        access_token: 'access-token',
+        refresh_token: 'refresh-token',
+      });
+      expect(mockUserService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'oauth@example.com',
+          oauth_provider: 'google',
+          oauth_id: 'google-123',
+          password_hash: null,
+        }),
+      );
     });
   });
 });
