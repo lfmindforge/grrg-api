@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { WishModule } from './wish/wish.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     ThrottlerModule.forRoot([{ name: 'default', ttl: 600_000, limit: 100 }]),
     UserModule,
     AuthModule,
+    WishModule,
   ],
   //Application throttleGuard sur toutes les routes
   providers: [
