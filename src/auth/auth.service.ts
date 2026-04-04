@@ -125,6 +125,8 @@ export class AuthService {
     displayName: string;
     avatarUrl?: string | null;
   }): Promise<{ access_token: string; refresh_token: string }> {
+    //normalise l'email car l'oauth github met une mauscule => 2 compte avec meme email possible=> pas bon.
+    const email = profile.email.toLowerCase();
     // Cas 1 : compte OAuth déjà existant
     const existing = await this.userService.findByOAuthId(
       profile.provider,
@@ -133,7 +135,7 @@ export class AuthService {
     if (existing) return this.generateTokens(existing.id, existing.email);
 
     // Cas 2 : email déjà utilisé par un compte email/mot de passe
-    const byEmail = await this.userService.findByEmail(profile.email);
+    const byEmail = await this.userService.findByEmail(email);
     if (byEmail)
       throw new ConflictException(
         'An account already exists with this email. Please log in with your password.',
@@ -142,7 +144,7 @@ export class AuthService {
     // Cas 3 : nouveau compte OAuth
     const pseudo = this.generatePseudo(profile.displayName);
     const user = await this.userService.create({
-      email: profile.email,
+      email,
       password_hash: null,
       pseudo,
       birthdate: null,

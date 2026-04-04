@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, Profile } from 'passport-github2';
@@ -39,7 +39,8 @@ export class GitHubStrategy extends PassportStrategy(Strategy, 'github') {
       });
       done(null, tokens);
     } catch (err) {
-      done(err, false);
+      if (err instanceof HttpException) throw err;
+      done(err as Error, false);
     }
   }
 }
