@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
+import { CreateUserData } from './user.types';
 
 @Injectable()
 export class UserService {
@@ -17,9 +18,13 @@ export class UserService {
     return this.userRepo.findOne({ where: { pseudo } });
   }
 
-  create(
-    data: Pick<User, 'email' | 'password_hash' | 'pseudo' | 'birthdate'>,
-  ): Promise<User> {
+  findByOAuthId(provider: string, oauthId: string): Promise<User | null> {
+    return this.userRepo.findOne({
+      where: { oauth_provider: provider, oauth_id: oauthId },
+    });
+  }
+
+  create(data: CreateUserData): Promise<User> {
     const user = this.userRepo.create(data);
     return this.userRepo.save(user);
   }

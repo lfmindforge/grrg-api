@@ -87,4 +87,30 @@ describe('UserService', () => {
       expect(result).toEqual(saved);
     });
   });
+
+  describe('findByOAuthId', () => {
+    it('retourne le user si provider + oauthId trouvés', async () => {
+      const user = {
+        id: 'uuid',
+        oauth_provider: 'google',
+        oauth_id: '123',
+      } as User;
+      mockRepo.findOne.mockResolvedValue(user);
+
+      const result = await service.findByOAuthId('google', '123');
+
+      expect(result).toEqual(user);
+      expect(mockRepo.findOne).toHaveBeenCalledWith({
+        where: { oauth_provider: 'google', oauth_id: '123' },
+      });
+    });
+
+    it('retourne null si non trouvé', async () => {
+      mockRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.findByOAuthId('google', 'inexistant');
+
+      expect(result).toBeNull();
+    });
+  });
 });
