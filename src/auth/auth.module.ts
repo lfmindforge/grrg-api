@@ -7,7 +7,6 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RefreshToken } from './entities/refresh-token.entity';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { GitHubStrategy } from './strategies/github.strategy';
@@ -22,14 +21,6 @@ import { GitHubStrategy } from './strategies/github.strategy';
     ConfigModule,
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    JwtStrategy,
-    JwtAuthGuard,
-    GoogleStrategy,
-    GitHubStrategy,
-  ],
-  //JwtAuthGuard exporté pour être utilisable dans les autres modules sans réimporter PassportModule
-  exports: [JwtAuthGuard],
+  providers: [AuthService, JwtStrategy, GoogleStrategy, GitHubStrategy],
 })
 export class AuthModule {}
