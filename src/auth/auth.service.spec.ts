@@ -23,7 +23,10 @@ describe('AuthService', () => {
     create: jest.fn(),
   };
   const mockJwtService = { signAsync: jest.fn(), verify: jest.fn() };
-  const mockConfigService = { get: jest.fn().mockReturnValue('test-secret') };
+  const mockConfigService = {
+    get: jest.fn().mockReturnValue('test-secret'),
+    getOrThrow: jest.fn().mockReturnValue('test-secret'),
+  };
   const mockRefreshTokenRepo = {
     save: jest.fn(),
     findOne: jest.fn(),

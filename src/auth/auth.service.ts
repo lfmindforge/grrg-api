@@ -14,6 +14,8 @@ import { randomUUID } from 'crypto';
 import { Repository } from 'typeorm';
 import { LoginDto } from './dto/login.dto';
 import { RefreshToken } from './entities/refresh-token.entity';
+//type auto de la lib ms utilisé par la lib jwt permet de typer correctement les string représentant des durées. car la lib ms parse ces string.
+import type { StringValue } from 'ms';
 
 @Injectable()
 export class AuthService {
@@ -79,7 +81,7 @@ export class AuthService {
     let payload: { sub: string; email: string; jti: string };
     try {
       payload = this.jwtService.verify(token, {
-        secret: this.config.get<string>('JWT_REFRESH_SECRET'),
+        secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
       });
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
@@ -96,11 +98,18 @@ export class AuthService {
     return this.generateTokens(payload.sub, payload.email);
   }
 
+  /**  La colonne est stockée en DB mais lors du refresh(), seul findOne({ id: jti }) est vérifié. L'expiration est déjà
+  gérée par jwtService.verify qui rejette les tokens expirés. expires_at en DB est donc redondant mais pas inutile — il
+  permet un futur job de nettoyage des tokens orphelins. C'est acceptable, mais à connaître si on te pose la question. */
+
+  /** getOrThrow lève une exception au démarrage si la variable est absente du .env, ce qui est le comportement voulu —
+  mieux vaut crasher au boot que d'avoir une erreur silencieuse en production. */
+
   async logout(token: string): Promise<void> {
     let payload: { jti: string };
     try {
       payload = this.jwtService.verify(token, {
-        secret: this.config.get<string>('JWT_SECRET_SECRET'),
+        secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
       });
     } catch {
       // Token invalide ou expiré: rien à révoqué, logout réussi.
@@ -115,20 +124,30 @@ export class AuthService {
     email: string,
   ): Promise<{ access_token: string; refresh_token: string }> {
     const jti = randomUUID();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(
+      //.env stock tout en string sans le parse number on auraitu ne concate au lieu d'un calcule
+      Date.now() + Number(this.config.get('JWT_REFRESH_EXPIRES_MS')),
+    );
 
     const [access_token, refresh_token] = await Promise.all([
       this.jwtService.signAsync(
         { sub: userId, email },
-        { secret: this.config.get<string>('JWT_SECRET'), expiresIn: '15m' },
+        {
+          secret: this.config.getOrThrow<string>('JWT_SECRET'),
+          expiresIn: this.config.getOrThrow<StringValue>(
+            'JWT_ACCESS_EXPIRES_IN',
+          ),
+        },
       ),
 
       // Le payload du refresh inclut email pour éviter un aller en DB lors du refresh
       this.jwtService.signAsync(
         { sub: userId, email, jti },
         {
-          secret: this.config.get<string>('JWT_REFRESH_SECRET'),
-          expiresIn: '7d',
+          secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
+          expiresIn: this.config.getOrThrow<StringValue>(
+            'JWT_REFRESH_EXPIRES_IN',
+          ),
         },
       ),
     ]);

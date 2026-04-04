@@ -14,5 +14,5 @@ export class RefreshToken {
   expires_at!: Date;
 
   @CreateDateColumn({ type: 'timestamptz' })
-  created_at!: string;
+  created_at!: Date;
 }
