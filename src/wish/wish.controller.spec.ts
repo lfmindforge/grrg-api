@@ -5,12 +5,16 @@ import { WishService } from './wish.service';
 import { CreateWishDto } from './dto/create-wish.dto';
 import { QueryWishDto } from './dto/query-wish.dto';
 import { DonationType, WishStatus } from './wish.types';
+import { UpdateWishDto } from './dto/update-wish.dto';
 
 describe('WishController', () => {
   let controller: WishController;
   let service: {
     findPublic: jest.Mock;
     findOne: jest.Mock;
+    findMine: jest.Mock;
+    update: jest.Mock;
+    softDelete: jest.Mock;
     create: jest.Mock;
   };
 
@@ -18,6 +22,9 @@ describe('WishController', () => {
     service = {
       findPublic: jest.fn(),
       findOne: jest.fn(),
+      findMine: jest.fn(),
+      update: jest.fn(),
+      softDelete: jest.fn(),
       create: jest.fn(),
     };
     const module: TestingModule = await Test.createTestingModule({
@@ -106,6 +113,52 @@ describe('WishController', () => {
       await controller.create(mockReq, dto, undefined as any);
 
       expect(service.create).toHaveBeenCalledWith('user-id-456', dto, []);
+    });
+  });
+
+  describe('findMine()', () => {
+    it('appelle WishService.findMine avec userId et query, retourne le résultat paginé', async () => {
+      const query: QueryWishDto = { page: 1, limit: 20 };
+      const paginatedResult = { data: [], total: 0, page: 1, limit: 20 };
+      service.findMine.mockResolvedValue(paginatedResult);
+      const mockReq = { user: { id: 'user-id' } } as any;
+
+      const result = await controller.findMine(mockReq, query);
+
+      expect(service.findMine).toHaveBeenCalledWith('user-id', query);
+      expect(result).toEqual(paginatedResult);
+    });
+  });
+
+  describe('update()', () => {
+    it('appelle WishService.update avec id, userId et dto, retourne le souhait mis à jour', async () => {
+      const dto: UpdateWishDto = { title: 'Nouveau titre' };
+      const mockReq = { user: { id: 'user-id' } } as any;
+      const updatedWish = { id: 'uuid-1', title: 'Nouveau titre' };
+      service.update.mockResolvedValue(updatedWish);
+
+      const result = await controller.update('uuid-1', mockReq, dto);
+
+      expect(service.update).toHaveBeenCalledWith('uuid-1', 'user-id', dto);
+      expect(result).toEqual(updatedWish);
+    });
+  });
+
+  describe('softDelete()', () => {
+    it('appelle WishService.softDelete avec id et userId', async () => {
+      const mockReq = { user: { id: 'user-id' } } as any;
+      service.softDelete.mockResolvedValue(undefined);
+
+      await controller.softDelete('uuid-1', mockReq);
+
+      expect(service.softDelete).toHaveBeenCalledWith('uuid-1', 'user-id');
+    });
+
+    it('ParseUUIDPipe rejette un id non-UUID pour softDelete avec BadRequestException', async () => {
+      const pipe = new ParseUUIDPipe();
+      await expect(
+        pipe.transform('pas-un-uuid', { type: 'param' }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

@@ -1,10 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import {
-  InternalServerErrorException,
-  NotFoundException,
-} from '@nestjs/common';
 import { WishService } from './wish.service';
 import { Wish } from './wish.entity';
 import { SupabaseStorageService } from './supabase-storage.service';
