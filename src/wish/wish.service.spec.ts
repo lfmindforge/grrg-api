@@ -18,6 +18,7 @@ describe('WishService', () => {
   let wishRepo: {
     create: jest.Mock;
     save: jest.Mock;
+    findOne: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
   let mockQb: {
@@ -46,6 +47,7 @@ describe('WishService', () => {
     wishRepo = {
       create: jest.fn(),
       save: jest.fn(),
+      findOne: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(mockQb),
     };
     supabaseStorage = { upload: jest.fn() };
@@ -311,6 +313,65 @@ describe('WishService', () => {
       expect(wishRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ amount: 50, is_private: true }),
       );
+    });
+  });
+
+  // --- findMine() ---
+
+  describe('findMine()', () => {
+    it('retourne une réponse paginée avec les valeurs par défaut (page=1, limit=20)', async () => {
+      const wish = { id: 'uuid-1', user_id: 'user-id', is_private: false };
+      mockQb.getManyAndCount.mockResolvedValue([[wish], 1]);
+
+      const result: PaginatedWishesDto = await service.findMine('user-id', {});
+
+      expect(wishRepo.createQueryBuilder).toHaveBeenCalledWith('wish');
+      expect(mockQb.where).toHaveBeenCalledWith('wish.user_id = :userId', {
+        userId: 'user-id',
+      });
+      expect(result).toEqual({ data: [wish], total: 1, page: 1, limit: 20 });
+    });
+
+    it('filtre uniquement les souhaits du user connecté', async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findMine('user-id-specifique', {});
+
+      expect(mockQb.where).toHaveBeenCalledWith('wish.user_id = :userId', {
+        userId: 'user-id-specifique',
+      });
+    });
+
+    it('inclut les souhaits privés — aucun filtre is_private appliqué', async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findMine('user-id', {});
+
+      expect(mockQb.andWhere).not.toHaveBeenCalledWith(
+        expect.stringContaining('is_private'),
+        expect.anything(),
+      );
+    });
+
+    it("inclut les souhaits 'cancelled' — aucun filtre status par défaut", async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findMine('user-id', {});
+
+      expect(mockQb.andWhere).not.toHaveBeenCalledWith(
+        expect.stringContaining('status'),
+        expect.anything(),
+      );
+    });
+
+    it('filtre par status si fourni explicitement', async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findMine('user-id', { status: WishStatus.PENDING });
+
+      expect(mockQb.andWhere).toHaveBeenCalledWith('wish.status = :status', {
+        status: WishStatus.PENDING,
+      });
     });
   });
 });

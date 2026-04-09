@@ -91,6 +91,29 @@ export class WishService {
     }
   }
 
+  async findMine(
+    userId: string,
+    query: QueryWishDto,
+  ): Promise<PaginatedWishesDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const qb = this.wishRepo
+      .createQueryBuilder('wish')
+      .where('wish.user_id = :userId', { userId });
+
+    if (query.status) {
+      qb.andWhere('wish.status = :status', { status: query.status });
+    }
+
+    const sortOrder: 'ASC' | 'DESC' = query.order === 'asc' ? 'ASC' : 'DESC';
+    qb.orderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+    return { data: data as unknown as WishPublicDto[], total, page, limit };
+  }
+
   async create(
     userId: string,
     dto: CreateWishDto,
