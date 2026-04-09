@@ -2,12 +2,14 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
   Req,
   UploadedFiles,
@@ -19,11 +21,21 @@ import type { Request } from 'express';
 import { WishService } from './wish.service';
 import { Public } from '../common/decorators/public.decorator';
 import { CreateWishDto } from './dto/create-wish.dto';
+import { UpdateWishDto } from './dto/update-wish.dto';
 import { QueryWishDto } from './dto/query-wish.dto';
 
 @Controller('wishes')
 export class WishController {
   constructor(private readonly wishService: WishService) {}
+
+  // Déclaré avant @Get(':id') — NestJS résout les routes dans l'ordre
+  @Get('me')
+  findMine(
+    @Req() req: Request & { user: { id: string } },
+    @Query() query: QueryWishDto,
+  ) {
+    return this.wishService.findMine(req.user.id, query);
+  }
 
   @Get()
   @Public()
@@ -35,6 +47,24 @@ export class WishController {
   @Public()
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.wishService.findOne(id);
+  }
+
+  @Put(':id')
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request & { user: { id: string } },
+    @Body() dto: UpdateWishDto,
+  ) {
+    return this.wishService.update(id, req.user.id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  softDelete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request & { user: { id: string } },
+  ) {
+    return this.wishService.softDelete(id, req.user.id);
   }
 
   @Post()

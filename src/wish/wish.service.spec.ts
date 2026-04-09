@@ -1,10 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import {
-  InternalServerErrorException,
-  NotFoundException,
-} from '@nestjs/common';
 import { WishService } from './wish.service';
 import { Wish } from './wish.entity';
 import { SupabaseStorageService } from './supabase-storage.service';
@@ -12,12 +8,18 @@ import { CreateWishDto } from './dto/create-wish.dto';
 import { QueryWishDto } from './dto/query-wish.dto';
 import { PaginatedWishesDto, WishPublicDto } from './dto/wish-response.dto';
 import { DonationType, WishStatus } from './wish.types';
+import {
+  ForbiddenException,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 
 describe('WishService', () => {
   let service: WishService;
   let wishRepo: {
     create: jest.Mock;
     save: jest.Mock;
+    findOne: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
   let mockQb: {
@@ -46,6 +48,7 @@ describe('WishService', () => {
     wishRepo = {
       create: jest.fn(),
       save: jest.fn(),
+      findOne: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(mockQb),
     };
     supabaseStorage = { upload: jest.fn() };
@@ -311,6 +314,180 @@ describe('WishService', () => {
       expect(wishRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ amount: 50, is_private: true }),
       );
+    });
+  });
+
+  // --- findMine() ---
+
+  describe('findMine()', () => {
+    it('retourne une réponse paginée avec les valeurs par défaut (page=1, limit=20)', async () => {
+      const wish = { id: 'uuid-1', user_id: 'user-id', is_private: false };
+      mockQb.getManyAndCount.mockResolvedValue([[wish], 1]);
+
+      const result: PaginatedWishesDto = await service.findMine('user-id', {});
+
+      expect(wishRepo.createQueryBuilder).toHaveBeenCalledWith('wish');
+      expect(mockQb.where).toHaveBeenCalledWith('wish.user_id = :userId', {
+        userId: 'user-id',
+      });
+      expect(result).toEqual({ data: [wish], total: 1, page: 1, limit: 20 });
+    });
+
+    it('filtre uniquement les souhaits du user connecté', async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findMine('user-id-specifique', {});
+
+      expect(mockQb.where).toHaveBeenCalledWith('wish.user_id = :userId', {
+        userId: 'user-id-specifique',
+      });
+    });
+
+    it('inclut les souhaits privés — aucun filtre is_private appliqué', async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findMine('user-id', {});
+
+      expect(mockQb.andWhere).not.toHaveBeenCalledWith(
+        expect.stringContaining('is_private'),
+        expect.anything(),
+      );
+    });
+
+    it("inclut les souhaits 'cancelled' — aucun filtre status par défaut", async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findMine('user-id', {});
+
+      expect(mockQb.andWhere).not.toHaveBeenCalledWith(
+        expect.stringContaining('status'),
+        expect.anything(),
+      );
+    });
+
+    it('filtre par status si fourni explicitement', async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findMine('user-id', { status: WishStatus.PENDING });
+
+      expect(mockQb.andWhere).toHaveBeenCalledWith('wish.status = :status', {
+        status: WishStatus.PENDING,
+      });
+    });
+  });
+
+  // --- update() ---
+
+  describe('update()', () => {
+    it("lève NotFoundException si le souhait n'existe pas", async () => {
+      wishRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.update('uuid-inexistant', 'user-id', { title: 'Nouveau' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it("lève ForbiddenException si le user n'est pas le propriétaire", async () => {
+      wishRepo.findOne.mockResolvedValue({
+        id: 'uuid-1',
+        user_id: 'autre-user',
+      });
+
+      await expect(
+        service.update('uuid-1', 'user-id', { title: 'Nouveau' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('merge partiel — ne modifie que les champs fournis', async () => {
+      const existingWish = {
+        id: 'uuid-1',
+        user_id: 'user-id',
+        title: 'Ancien',
+        description: 'Desc originale',
+      };
+      wishRepo.findOne.mockResolvedValue(existingWish);
+      wishRepo.save.mockImplementation((w) => Promise.resolve(w));
+
+      await service.update('uuid-1', 'user-id', { title: 'Nouveau' });
+
+      expect(wishRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Nouveau',
+          description: 'Desc originale',
+        }),
+      );
+    });
+
+    it('persiste et retourne le souhait mis à jour', async () => {
+      const existingWish = {
+        id: 'uuid-1',
+        user_id: 'user-id',
+        title: 'Ancien',
+      };
+      const updatedWish = { ...existingWish, title: 'Nouveau' };
+      wishRepo.findOne.mockResolvedValue(existingWish);
+      wishRepo.save.mockResolvedValue(updatedWish);
+
+      const result = await service.update('uuid-1', 'user-id', {
+        title: 'Nouveau',
+      });
+
+      expect(result).toEqual(updatedWish);
+    });
+  });
+
+  // --- softDelete() ---
+
+  describe('softDelete()', () => {
+    it("lève NotFoundException si le souhait n'existe pas", async () => {
+      wishRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.softDelete('uuid-inexistant', 'user-id'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it("lève ForbiddenException si le user n'est pas le propriétaire", async () => {
+      wishRepo.findOne.mockResolvedValue({
+        id: 'uuid-1',
+        user_id: 'autre-user',
+        status: WishStatus.PENDING,
+      });
+
+      await expect(service.softDelete('uuid-1', 'user-id')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('passe status = CANCELLED et sauvegarde', async () => {
+      const wish = {
+        id: 'uuid-1',
+        user_id: 'user-id',
+        status: WishStatus.PENDING,
+      };
+      wishRepo.findOne.mockResolvedValue(wish);
+      wishRepo.save.mockResolvedValue({
+        ...wish,
+        status: WishStatus.CANCELLED,
+      });
+
+      await service.softDelete('uuid-1', 'user-id');
+
+      expect(wishRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status: WishStatus.CANCELLED }),
+      );
+    });
+
+    it('idempotent — si déjà CANCELLED, ne rappelle pas save()', async () => {
+      wishRepo.findOne.mockResolvedValue({
+        id: 'uuid-1',
+        user_id: 'user-id',
+        status: WishStatus.CANCELLED,
+      });
+
+      await service.softDelete('uuid-1', 'user-id');
+
+      expect(wishRepo.save).not.toHaveBeenCalled();
     });
   });
 });

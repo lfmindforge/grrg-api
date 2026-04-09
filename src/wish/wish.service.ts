@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -8,6 +12,7 @@ import { QueryWishDto } from './dto/query-wish.dto';
 import { PaginatedWishesDto, WishPublicDto } from './dto/wish-response.dto';
 import { SupabaseStorageService } from './supabase-storage.service';
 import { WishStatus } from './wish.types';
+import { UpdateWishDto } from './dto/update-wish.dto';
 
 @Injectable()
 export class WishService {
@@ -89,6 +94,52 @@ export class WishService {
       default:
         return 'wish.created_at';
     }
+  }
+
+  async findMine(
+    userId: string,
+    query: QueryWishDto,
+  ): Promise<PaginatedWishesDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const qb = this.wishRepo
+      .createQueryBuilder('wish')
+      .where('wish.user_id = :userId', { userId });
+
+    if (query.status) {
+      qb.andWhere('wish.status = :status', { status: query.status });
+    }
+
+    const sortOrder: 'ASC' | 'DESC' = query.order === 'asc' ? 'ASC' : 'DESC';
+    qb.orderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+    return { data: data as unknown as WishPublicDto[], total, page, limit };
+  }
+
+  async update(id: string, userId: string, dto: UpdateWishDto): Promise<Wish> {
+    const wish = await this.findOwnedWishOrThrow(id, userId);
+    Object.assign(wish, dto);
+    return this.wishRepo.save(wish);
+  }
+
+  async softDelete(id: string, userId: string): Promise<void> {
+    const wish = await this.findOwnedWishOrThrow(id, userId);
+    if (wish.status === WishStatus.CANCELLED) return;
+    wish.status = WishStatus.CANCELLED;
+    await this.wishRepo.save(wish);
+  }
+
+  private async findOwnedWishOrThrow(
+    id: string,
+    userId: string,
+  ): Promise<Wish> {
+    const wish = await this.wishRepo.findOne({ where: { id } });
+    if (!wish) throw new NotFoundException('Souhait introuvable');
+    if (wish.user_id !== userId) throw new ForbiddenException('Accès refusé');
+    return wish;
   }
 
   async create(
