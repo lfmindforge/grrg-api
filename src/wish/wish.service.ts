@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Wish } from './wish.entity';
 import { CreateWishDto } from './dto/create-wish.dto';
+import { QueryWishDto } from './dto/query-wish.dto';
+import { PaginatedWishesDto, WishPublicDto } from './dto/wish-response.dto';
 import { SupabaseStorageService } from './supabase-storage.service';
 import { WishStatus } from './wish.types';
 
@@ -15,8 +17,78 @@ export class WishService {
     private readonly config: ConfigService,
   ) {}
 
-  findPublic(): Promise<Wish[]> {
-    return this.wishRepo.find({ where: { is_private: false } });
+  async findPublic(query: QueryWishDto): Promise<PaginatedWishesDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const qb = this.wishRepo
+      .createQueryBuilder('wish')
+      .leftJoinAndSelect('wish.user', 'user')
+      .where('wish.is_private = :isPrivate', { isPrivate: false });
+
+    // Exclut les souhaits annulés par défaut sauf si status explicite
+    if (query.status) {
+      qb.andWhere('wish.status = :status', { status: query.status });
+    } else {
+      qb.andWhere('wish.status != :cancelled', {
+        cancelled: WishStatus.CANCELLED,
+      });
+    }
+
+    if (query.category) {
+      qb.andWhere('LOWER(wish.category) = LOWER(:category)', {
+        category: query.category,
+      });
+    }
+
+    if (query.donation_type) {
+      qb.andWhere('wish.donation_type = :donationType', {
+        donationType: query.donation_type,
+      });
+    }
+
+    if (query.search) {
+      qb.andWhere(
+        '(wish.title ILIKE :search OR wish.description ILIKE :search)',
+        { search: `%${query.search}%` },
+      );
+    }
+
+    const sortOrder: 'ASC' | 'DESC' = query.order === 'asc' ? 'ASC' : 'DESC';
+    qb.orderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+    return { data: data as unknown as WishPublicDto[], total, page, limit };
+  }
+
+  async findOne(id: string): Promise<WishPublicDto> {
+    const wish = await this.wishRepo
+      .createQueryBuilder('wish')
+      .leftJoinAndSelect('wish.user', 'user')
+      .where('wish.id = :id AND wish.is_private = :isPrivate', {
+        id,
+        isPrivate: false,
+      })
+      .getOne();
+
+    if (!wish) {
+      throw new NotFoundException('Souhait introuvable');
+    }
+
+    return wish as unknown as WishPublicDto;
+  }
+
+  // Placeholder — remplacer 'popularity' par COUNT(donations) en US-007
+  private resolveSortField(sort: string): string {
+    switch (sort) {
+      case 'amount':
+        return 'wish.amount';
+      case 'popularity':
+        return 'wish.created_at';
+      default:
+        return 'wish.created_at';
+    }
   }
 
   async create(
