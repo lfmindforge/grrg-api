@@ -1,20 +1,53 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { InternalServerErrorException } from '@nestjs/common';
+import {
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { WishService } from './wish.service';
 import { Wish } from './wish.entity';
 import { SupabaseStorageService } from './supabase-storage.service';
 import { CreateWishDto } from './dto/create-wish.dto';
+import { QueryWishDto } from './dto/query-wish.dto';
+import { PaginatedWishesDto, WishPublicDto } from './dto/wish-response.dto';
 import { DonationType, WishStatus } from './wish.types';
 
 describe('WishService', () => {
   let service: WishService;
-  let wishRepo: { create: jest.Mock; save: jest.Mock; find: jest.Mock };
+  let wishRepo: {
+    create: jest.Mock;
+    save: jest.Mock;
+    createQueryBuilder: jest.Mock;
+  };
+  let mockQb: {
+    leftJoinAndSelect: jest.Mock;
+    where: jest.Mock;
+    andWhere: jest.Mock;
+    orderBy: jest.Mock;
+    skip: jest.Mock;
+    take: jest.Mock;
+    getManyAndCount: jest.Mock;
+    getOne: jest.Mock;
+  };
   let supabaseStorage: { upload: jest.Mock };
 
   beforeEach(async () => {
-    wishRepo = { create: jest.fn(), save: jest.fn(), find: jest.fn() };
+    mockQb = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+      getOne: jest.fn().mockResolvedValue(null),
+    };
+    wishRepo = {
+      create: jest.fn(),
+      save: jest.fn(),
+      createQueryBuilder: jest.fn().mockReturnValue(mockQb),
+    };
     supabaseStorage = { upload: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -33,31 +66,163 @@ describe('WishService', () => {
     jest.clearAllMocks();
   });
 
-  const dto: CreateWishDto = {
-    title: 'Mon souhait',
-    description: 'Un beau souhait',
-    category: 'Électronique',
-    donation_type: DonationType.FINANCIAL,
-  };
-
-  const mockFile = {
-    buffer: Buffer.from('img'),
-    mimetype: 'image/jpeg',
-    originalname: 'photo.jpg',
-  } as Express.Multer.File;
+  // --- findPublic() ---
 
   describe('findPublic()', () => {
-    it('appelle wishRepo.find avec is_private = false et retourne les résultats', async () => {
-      wishRepo.find.mockResolvedValue([]);
-      const result = await service.findPublic();
-      expect(wishRepo.find).toHaveBeenCalledWith({
-        where: { is_private: false },
+    it('retourne une réponse paginée avec les valeurs par défaut (page=1, limit=20)', async () => {
+      const wish = { id: 'uuid-1', title: 'Test', is_private: false };
+      mockQb.getManyAndCount.mockResolvedValue([[wish], 1]);
+
+      const result: PaginatedWishesDto = await service.findPublic({});
+
+      expect(wishRepo.createQueryBuilder).toHaveBeenCalledWith('wish');
+      expect(mockQb.leftJoinAndSelect).toHaveBeenCalledWith(
+        'wish.user',
+        'user',
+      );
+      expect(mockQb.where).toHaveBeenCalledWith(
+        'wish.is_private = :isPrivate',
+        { isPrivate: false },
+      );
+      expect(result).toEqual({ data: [wish], total: 1, page: 1, limit: 20 });
+    });
+
+    it("exclut les souhaits 'cancelled' par défaut (aucun filtre status)", async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findPublic({});
+
+      expect(mockQb.andWhere).toHaveBeenCalledWith(
+        'wish.status != :cancelled',
+        { cancelled: WishStatus.CANCELLED },
+      );
+    });
+
+    it("inclut 'cancelled' si status=cancelled est fourni explicitement", async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findPublic({ status: WishStatus.CANCELLED });
+
+      expect(mockQb.andWhere).toHaveBeenCalledWith('wish.status = :status', {
+        status: WishStatus.CANCELLED,
       });
-      expect(result).toEqual([]);
+    });
+
+    it('filtre par category (insensible à la casse)', async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findPublic({ category: 'Électronique' });
+
+      expect(mockQb.andWhere).toHaveBeenCalledWith(
+        'LOWER(wish.category) = LOWER(:category)',
+        { category: 'Électronique' },
+      );
+    });
+
+    it('filtre par donation_type', async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findPublic({ donation_type: DonationType.DELIVERY });
+
+      expect(mockQb.andWhere).toHaveBeenCalledWith(
+        'wish.donation_type = :donationType',
+        { donationType: DonationType.DELIVERY },
+      );
+    });
+
+    it('recherche par mot-clé (ILIKE sur title et description)', async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findPublic({ search: 'vélo' });
+
+      expect(mockQb.andWhere).toHaveBeenCalledWith(
+        '(wish.title ILIKE :search OR wish.description ILIKE :search)',
+        { search: '%vélo%' },
+      );
+    });
+
+    it('trie par popularité avec wish.created_at (placeholder — COUNT donations en US-007)', async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findPublic({ sort: 'popularity' });
+
+      expect(mockQb.orderBy).toHaveBeenCalledWith('wish.created_at', 'DESC');
+    });
+
+    it('applique la pagination : page=2, limit=10 → skip=10, take=10', async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      const result = await service.findPublic({ page: 2, limit: 10 });
+
+      expect(mockQb.skip).toHaveBeenCalledWith(10);
+      expect(mockQb.take).toHaveBeenCalledWith(10);
+      expect(result.page).toBe(2);
+      expect(result.limit).toBe(10);
     });
   });
 
+  // --- findOne() ---
+
+  describe('findOne()', () => {
+    const mockWish = {
+      id: 'uuid-1',
+      title: 'Mon souhait',
+      is_private: false,
+      user: {
+        id: 'user-1',
+        pseudo: 'alice',
+        avatar_url: null,
+        grade: 'etincelle',
+        glow_points: 0,
+      },
+    };
+
+    it('retourne le souhait avec le user si trouvé', async () => {
+      mockQb.getOne.mockResolvedValue(mockWish);
+
+      const result: WishPublicDto = await service.findOne('uuid-1');
+
+      expect(wishRepo.createQueryBuilder).toHaveBeenCalledWith('wish');
+      expect(mockQb.leftJoinAndSelect).toHaveBeenCalledWith(
+        'wish.user',
+        'user',
+      );
+      expect(result).toEqual(mockWish);
+    });
+
+    it('lève NotFoundException si le souhait est introuvable', async () => {
+      mockQb.getOne.mockResolvedValue(null);
+
+      await expect(service.findOne('uuid-inexistant')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('lève NotFoundException si le souhait est privé (is_private=false dans la query → getOne retourne null)', async () => {
+      mockQb.getOne.mockResolvedValue(null);
+
+      await expect(service.findOne('uuid-prive')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  // --- create() ---
+
   describe('create()', () => {
+    const dto: CreateWishDto = {
+      title: 'Mon souhait',
+      description: 'Un beau souhait',
+      category: 'Électronique',
+      donation_type: DonationType.FINANCIAL,
+    };
+
+    const mockFile = {
+      buffer: Buffer.from('img'),
+      mimetype: 'image/jpeg',
+      originalname: 'photo.jpg',
+    } as Express.Multer.File;
+
     it('sans fichiers : insère en DB avec media_urls vide et status pending', async () => {
       const savedWish = {
         id: 'uuid-1',

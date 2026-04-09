@@ -5,7 +5,10 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
   Post,
+  Query,
   Req,
   UploadedFiles,
   UseInterceptors,
@@ -16,6 +19,7 @@ import type { Request } from 'express';
 import { WishService } from './wish.service';
 import { Public } from '../common/decorators/public.decorator';
 import { CreateWishDto } from './dto/create-wish.dto';
+import { QueryWishDto } from './dto/query-wish.dto';
 
 @Controller('wishes')
 export class WishController {
@@ -23,8 +27,14 @@ export class WishController {
 
   @Get()
   @Public()
-  findPublic() {
-    return this.wishService.findPublic();
+  findPublic(@Query() query: QueryWishDto) {
+    return this.wishService.findPublic(query);
+  }
+
+  @Get(':id')
+  @Public()
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.wishService.findOne(id);
   }
 
   @Post()
