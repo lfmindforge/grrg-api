@@ -10,7 +10,7 @@ import { Wish } from './wish.entity';
 import { CreateWishDto } from './dto/create-wish.dto';
 import { QueryWishDto } from './dto/query-wish.dto';
 import { PaginatedWishesDto, WishPublicDto } from './dto/wish-response.dto';
-import { SupabaseStorageService } from './supabase-storage.service';
+import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { WishStatus } from './wish.types';
 import { UpdateWishDto } from './dto/update-wish.dto';
 
