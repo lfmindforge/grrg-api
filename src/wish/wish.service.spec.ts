@@ -3,7 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { WishService } from './wish.service';
 import { Wish } from './wish.entity';
-import { SupabaseStorageService } from './supabase-storage.service';
+import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { CreateWishDto } from './dto/create-wish.dto';
 import { QueryWishDto } from './dto/query-wish.dto';
 import { PaginatedWishesDto, WishPublicDto } from './dto/wish-response.dto';
