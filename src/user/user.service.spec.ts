@@ -219,4 +219,106 @@ describe('UserService', () => {
       ]);
     });
   });
+
+  // --- updateMe() ---
+
+  describe('updateMe()', () => {
+    let existingUser: User;
+
+    beforeEach(() => {
+      existingUser = {
+        id: 'user-id',
+        pseudo: 'alice',
+        avatar_url: null,
+        grade: 'etincelle',
+        glow_points: 0,
+      } as unknown as User;
+    });
+
+    it('met à jour pseudo si fourni et disponible', async () => {
+      mockUserRepo.findOne
+        .mockResolvedValueOnce(existingUser)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ ...existingUser, pseudo: 'nouveau' });
+      mockUserRepo.save.mockResolvedValue({
+        ...existingUser,
+        pseudo: 'nouveau',
+      });
+      mockWishRepo.find.mockResolvedValue([]);
+
+      const result = await service.updateMe('user-id', { pseudo: 'nouveau' });
+
+      expect(mockUserRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ pseudo: 'nouveau' }),
+      );
+      expect(result.pseudo).toBe('nouveau');
+    });
+
+    it('lève ConflictException si pseudo déjà pris par un autre user', async () => {
+      mockUserRepo.findOne
+        .mockResolvedValueOnce(existingUser)
+        .mockResolvedValueOnce({ id: 'autre-user', pseudo: 'bob' });
+
+      await expect(
+        service.updateMe('user-id', { pseudo: 'bob' }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockUserRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('pseudo identique à actuel → pas de ConflictException, sauvegarde quand même', async () => {
+      mockUserRepo.findOne
+        .mockResolvedValueOnce(existingUser)
+        .mockResolvedValueOnce(existingUser);
+      mockUserRepo.save.mockResolvedValue(existingUser);
+      mockWishRepo.find.mockResolvedValue([]);
+
+      await expect(
+        service.updateMe('user-id', { pseudo: 'alice' }),
+      ).resolves.not.toThrow();
+      expect(mockUserRepo.save).toHaveBeenCalled();
+    });
+
+    it('upload avatar vers Supabase et met à jour avatar_url', async () => {
+      const file = {
+        buffer: Buffer.from('img'),
+        mimetype: 'image/jpeg',
+        originalname: 'avatar.jpg',
+      } as Express.Multer.File;
+      const avatarUrl = 'https://cdn.supabase.co/avatars/user-id/avatar.jpg';
+      mockStorage.upload.mockResolvedValue(avatarUrl);
+      mockUserRepo.findOne
+        .mockResolvedValueOnce(existingUser)
+        .mockResolvedValueOnce({ ...existingUser, avatar_url: avatarUrl });
+      mockUserRepo.save.mockResolvedValue({
+        ...existingUser,
+        avatar_url: avatarUrl,
+      });
+      mockWishRepo.find.mockResolvedValue([]);
+
+      const result = await service.updateMe('user-id', {}, file);
+
+      expect(mockStorage.upload).toHaveBeenCalledWith(
+        'avatars',
+        expect.stringMatching(/^user-id\/.+\.jpg$/),
+        file,
+      );
+      expect(mockUserRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ avatar_url: avatarUrl }),
+      );
+      expect(result.avatar_url).toBe(avatarUrl);
+    });
+
+    it('sans pseudo ni fichier → sauvegarde et retourne profil inchangé', async () => {
+      mockUserRepo.findOne
+        .mockResolvedValueOnce(existingUser)
+        .mockResolvedValueOnce(existingUser);
+      mockUserRepo.save.mockResolvedValue(existingUser);
+      mockWishRepo.find.mockResolvedValue([]);
+
+      const result = await service.updateMe('user-id', {});
+
+      expect(mockUserRepo.save).toHaveBeenCalled();
+      expect(result.pseudo).toBe('alice');
+    });
+  });
 });

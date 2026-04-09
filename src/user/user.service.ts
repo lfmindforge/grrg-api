@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -11,6 +15,7 @@ import {
 } from './user.types';
 import { WishStatus } from '../wish/wish.types';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UserService {
@@ -70,5 +75,30 @@ export class UserService {
       donations_count: 0,
       gallery,
     };
+  }
+
+  async updateMe(
+    userId: string,
+    dto: UpdateUserDto,
+    file?: Express.Multer.File,
+  ): Promise<UserPublicProfileDto> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    // userId vient du JWT — l'utilisateur existe toujours
+
+    if (dto.pseudo && dto.pseudo !== user!.pseudo) {
+      const existing = await this.findByPseudo(dto.pseudo);
+      if (existing) throw new ConflictException('Pseudo déjà utilisé');
+      user!.pseudo = dto.pseudo;
+    }
+
+    if (file) {
+      const bucket = this.config.getOrThrow<string>('SUPABASE_BUCKET_AVATARS');
+      const ext = file.originalname.split('.').pop() ?? 'bin';
+      const path = `${userId}/${Date.now()}.${ext}`;
+      user!.avatar_url = await this.supabaseStorage.upload(bucket, path, file);
+    }
+
+    await this.userRepo.save(user!);
+    return this.getProfile(userId);
   }
 }
