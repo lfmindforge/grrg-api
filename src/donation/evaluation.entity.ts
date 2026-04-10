@@ -35,6 +35,9 @@ export class Evaluation {
   @Column({ type: 'int', default: 0 })
   glow_awarded!: number;
 
+  @Column({ type: 'text' })
+  description!: string;
+
   @Column({ type: 'text', nullable: true })
   proof_url!: string | null;
 

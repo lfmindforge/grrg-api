@@ -8,6 +8,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { WishModule } from './wish/wish.module';
 import { DonationModule } from './donation/donation.module';
+import { EvaluationModule } from './evaluation/evaluation.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { DonationModule } from './donation/donation.module';
     AuthModule,
     WishModule,
     DonationModule,
+    EvaluationModule,
   ],
   //Application throttleGuard sur toutes les routes
   providers: [
