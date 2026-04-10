@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -13,7 +14,7 @@ import type { Request } from 'express';
 import { DonationService } from './donation.service';
 import { CreateDonationDto } from './dto/create-donation.dto';
 
-@Controller('donate')
+@Controller('donations')
 export class DonationController {
   constructor(private readonly donationService: DonationService) {}
 
@@ -33,5 +34,11 @@ export class DonationController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.donationService.confirm(req.user.id, id);
+  }
+
+  @Get('me')
+  @HttpCode(HttpStatus.OK)
+  findMyDonations(@Req() req: Request & { user: { id: string } }) {
+    return this.donationService.findMyDonations(req.user.id);
   }
 }
