@@ -4,10 +4,12 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { User } from '../user/user.entity';
 import { Wish } from '../wish/wish.entity';
+import { Evaluation } from './evaluation.entity';
 import { DonationType } from '../wish/wish.types';
 import { DonationStatus } from './donation.types';
 
@@ -51,4 +53,10 @@ export class Donation {
 
   @CreateDateColumn()
   created_at!: Date;
+
+  // Relation inverse — chargeable via relations: { evaluation: true }
+  @OneToOne(() => Evaluation, (evaluation) => evaluation.donation, {
+    nullable: true,
+  })
+  evaluation!: Evaluation | null;
 }

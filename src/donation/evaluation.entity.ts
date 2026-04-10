@@ -18,7 +18,7 @@ export class Evaluation {
   donation_id!: string;
 
   // OneToOne — contrainte UNIQUE donation_id en base
-  @OneToOne(() => Donation)
+  @OneToOne(() => Donation, (donation) => donation.evaluation)
   @JoinColumn({ name: 'donation_id' })
   donation!: Donation;
 
