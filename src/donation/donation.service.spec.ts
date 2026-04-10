@@ -14,7 +14,7 @@ import { CreateDonationDto } from './dto/create-donation.dto';
 
 describe('DonationService', () => {
   let service: DonationService;
-  let donationRepo: { create: jest.Mock; save: jest.Mock; findOne: jest.Mock };
+  let donationRepo: { create: jest.Mock; save: jest.Mock; findOne: jest.Mock; find: jest.Mock };
   let wishRepo: { findOne: jest.Mock };
 
   const DONOR_ID = 'donor-uuid';
@@ -28,7 +28,7 @@ describe('DonationService', () => {
   } as Wish;
 
   beforeEach(async () => {
-    donationRepo = { create: jest.fn(), save: jest.fn(), findOne: jest.fn() };
+    donationRepo = { create: jest.fn(), save: jest.fn(), findOne: jest.fn(), find: jest.fn() };
     wishRepo = { findOne: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -244,6 +244,66 @@ describe('DonationService', () => {
       await expect(service.confirm(OWNER_ID, DONATION_ID)).rejects.toThrow(
         BadRequestException,
       );
+    });
+  });
+
+  describe('findMyDonations', () => {
+    it('retourne les donations avec wish et evaluation chargées', async () => {
+      const donations = [
+        {
+          id: 'don-1',
+          donor_id: DONOR_ID,
+          wish: {
+            id: WISH_ID,
+            title: 'Je rêve d\'un vélo',
+            category: 'sport',
+            media_urls: ['https://img.jpg'],
+          },
+          evaluation: {
+            glow_awarded: 30,
+            satisfaction: 'happy',
+            bonus: 'on_time',
+          },
+          status: DonationStatus.COMPLETED,
+          created_at: new Date(),
+        },
+      ];
+      donationRepo.find.mockResolvedValue(donations);
+
+      const result = await service.findMyDonations(DONOR_ID);
+
+      expect(donationRepo.find).toHaveBeenCalledWith({
+        where: { donor_id: DONOR_ID },
+        relations: { wish: true, evaluation: true },
+        order: { created_at: 'DESC' },
+      });
+      expect(result).toEqual(donations);
+    });
+
+    it('retourne les donations avec evaluation null si non évaluée', async () => {
+      const donations = [
+        {
+          id: 'don-1',
+          donor_id: DONOR_ID,
+          wish: { id: WISH_ID, title: 'Souhait', category: 'sport', media_urls: [] },
+          evaluation: null,
+          status: DonationStatus.PENDING,
+          created_at: new Date(),
+        },
+      ];
+      donationRepo.find.mockResolvedValue(donations);
+
+      const result = await service.findMyDonations(DONOR_ID);
+
+      expect(result[0].evaluation).toBeNull();
+    });
+
+    it('retourne un tableau vide si aucun don', async () => {
+      donationRepo.find.mockResolvedValue([]);
+
+      const result = await service.findMyDonations(DONOR_ID);
+
+      expect(result).toEqual([]);
     });
   });
 });
