@@ -71,4 +71,12 @@ export class DonationService {
     donation.status = DonationStatus.COMPLETED;
     return this.donationRepo.save(donation);
   }
+
+  async findMyDonations(userId: string): Promise<Donation[]> {
+    return this.donationRepo.find({
+      where: { donor_id: userId },
+      relations: { wish: true, evaluation: true },
+      order: { created_at: 'DESC' },
+    });
+  }
 }
