@@ -7,12 +7,12 @@ import { DonationStatus } from './donation.types';
 
 describe('DonationController', () => {
   let controller: DonationController;
-  let service: { propose: jest.Mock };
+  let service: { propose: jest.Mock; confirm: jest.Mock };
 
   const DONOR_ID = 'donor-uuid';
 
   beforeEach(async () => {
-    service = { propose: jest.fn() };
+    service = { propose: jest.fn(), confirm: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DonationController],
@@ -36,6 +36,19 @@ describe('DonationController', () => {
       const result = await controller.propose(mockReq, dto);
 
       expect(service.propose).toHaveBeenCalledWith(DONOR_ID, dto);
+      expect(result).toEqual(expected);
+    });
+  });
+
+  describe('PATCH /:id/confirm', () => {
+    it('appelle service.confirm avec userId et donationId', async () => {
+      const mockReq = { user: { id: DONOR_ID } } as any;
+      const expected = { id: 'don-uuid', status: DonationStatus.COMPLETED };
+      service.confirm.mockResolvedValue(expected);
+
+      const result = await controller.confirm(mockReq, 'don-uuid');
+
+      expect(service.confirm).toHaveBeenCalledWith(DONOR_ID, 'don-uuid');
       expect(result).toEqual(expected);
     });
   });

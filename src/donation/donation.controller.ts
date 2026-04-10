@@ -3,6 +3,9 @@ import {
   Controller,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
   Req,
 } from '@nestjs/common';
@@ -21,5 +24,14 @@ export class DonationController {
     @Body() dto: CreateDonationDto,
   ) {
     return this.donationService.propose(req.user.id, dto);
+  }
+
+  @Patch(':id/confirm')
+  @HttpCode(HttpStatus.OK)
+  confirm(
+    @Req() req: Request & { user: { id: string } },
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.donationService.confirm(req.user.id, id);
   }
 }

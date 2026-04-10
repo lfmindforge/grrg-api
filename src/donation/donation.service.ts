@@ -46,6 +46,29 @@ export class DonationService {
       status: DonationStatus.PENDING,
     });
 
+    const saved = await this.donationRepo.save(donation);
+    // TODO US-020 — NotificationService.notify(wish.user_id, { type: 'donation_proposed', donation_id: saved.id })
+    return saved;
+  }
+
+  async confirm(userId: string, donationId: string): Promise<Donation> {
+    const donation = await this.donationRepo.findOne({
+      where: { id: donationId },
+      relations: { wish: true },
+    });
+    if (!donation) throw new NotFoundException('Donation introuvable');
+
+    if (donation.wish.user_id !== userId) {
+      throw new ForbiddenException(
+        'Seul le receveur du souhait peut confirmer un don',
+      );
+    }
+
+    if (donation.status !== DonationStatus.PENDING) {
+      throw new BadRequestException('Ce don a déjà été confirmé');
+    }
+
+    donation.status = DonationStatus.COMPLETED;
     return this.donationRepo.save(donation);
   }
 }
