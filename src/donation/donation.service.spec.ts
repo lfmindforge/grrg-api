@@ -14,7 +14,7 @@ import { CreateDonationDto } from './dto/create-donation.dto';
 
 describe('DonationService', () => {
   let service: DonationService;
-  let donationRepo: { create: jest.Mock; save: jest.Mock };
+  let donationRepo: { create: jest.Mock; save: jest.Mock; findOne: jest.Mock };
   let wishRepo: { findOne: jest.Mock };
 
   const DONOR_ID = 'donor-uuid';
@@ -28,7 +28,7 @@ describe('DonationService', () => {
   } as Wish;
 
   beforeEach(async () => {
-    donationRepo = { create: jest.fn(), save: jest.fn() };
+    donationRepo = { create: jest.fn(), save: jest.fn(), findOne: jest.fn() };
     wishRepo = { findOne: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -157,6 +157,92 @@ describe('DonationService', () => {
           amount: null,
           nature_description: 'Un vélo',
         }),
+      );
+    });
+
+    it('met amount à null et enregistre nature_description pour type in_person', async () => {
+      const dto: CreateDonationDto = {
+        wish_id: WISH_ID,
+        type: DonationType.IN_PERSON,
+        nature_description: 'Cours de guitare',
+      };
+      wishRepo.findOne.mockResolvedValue(mockWish);
+      donationRepo.create.mockReturnValue({ ...dto, donor_id: DONOR_ID });
+      donationRepo.save.mockResolvedValue({
+        ...dto,
+        donor_id: DONOR_ID,
+        status: DonationStatus.PENDING,
+      });
+
+      await service.propose(DONOR_ID, dto);
+
+      expect(donationRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: null,
+          nature_description: 'Cours de guitare',
+          type: DonationType.IN_PERSON,
+        }),
+      );
+    });
+  });
+
+  describe('confirm', () => {
+    const DONATION_ID = 'donation-uuid';
+
+    const mockDonationPending = {
+      id: DONATION_ID,
+      wish_id: WISH_ID,
+      donor_id: DONOR_ID,
+      type: DonationType.DELIVERY,
+      amount: null,
+      nature_description: 'Un vélo',
+      is_anonymous: false,
+      status: DonationStatus.PENDING,
+      wish: { id: WISH_ID, user_id: OWNER_ID } as Wish,
+      created_at: new Date(),
+    } as Donation;
+
+    it('transitions une donation pending vers completed', async () => {
+      const saved = { ...mockDonationPending, status: DonationStatus.COMPLETED };
+      donationRepo.findOne.mockResolvedValue(mockDonationPending);
+      donationRepo.save.mockResolvedValue(saved);
+
+      const result = await service.confirm(OWNER_ID, DONATION_ID);
+
+      expect(donationRepo.findOne).toHaveBeenCalledWith({
+        where: { id: DONATION_ID },
+        relations: { wish: true },
+      });
+      expect(donationRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status: DonationStatus.COMPLETED }),
+      );
+      expect(result.status).toBe(DonationStatus.COMPLETED);
+    });
+
+    it('lève NotFoundException si la donation est introuvable', async () => {
+      donationRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.confirm(OWNER_ID, DONATION_ID)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it("lève ForbiddenException si l'appelant n'est pas le receveur du souhait", async () => {
+      donationRepo.findOne.mockResolvedValue(mockDonationPending);
+
+      await expect(service.confirm(DONOR_ID, DONATION_ID)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('lève BadRequestException si la donation est déjà completed', async () => {
+      donationRepo.findOne.mockResolvedValue({
+        ...mockDonationPending,
+        status: DonationStatus.COMPLETED,
+      });
+
+      await expect(service.confirm(OWNER_ID, DONATION_ID)).rejects.toThrow(
+        BadRequestException,
       );
     });
   });
