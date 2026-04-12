@@ -7,13 +7,16 @@ import { User } from '../user/user.entity';
 import { StorageModule } from '../common/storage/storage.module';
 import { EvaluationController } from './evaluation.controller';
 import { EvaluationService } from './evaluation.service';
+import { GlowService } from '../common/glow.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Evaluation, Donation, Wish, User]),
     StorageModule,
+    NotificationsModule,
   ],
   controllers: [EvaluationController],
-  providers: [EvaluationService],
+  providers: [EvaluationService, GlowService],
 })
 export class EvaluationModule {}

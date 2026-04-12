@@ -9,6 +9,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { WishModule } from './wish/wish.module';
 import { DonationModule } from './donation/donation.module';
 import { EvaluationModule } from './evaluation/evaluation.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { EvaluationModule } from './evaluation/evaluation.module';
     WishModule,
     DonationModule,
     EvaluationModule,
+    NotificationsModule,
   ],
   //Application throttleGuard sur toutes les routes
   providers: [

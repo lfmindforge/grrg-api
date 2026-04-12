@@ -15,38 +15,12 @@ import { Wish } from '../wish/wish.entity';
 import {
   DonationStatus,
   EvaluationBonus,
-  EvaluationSatisfaction,
 } from '../donation/donation.types';
 import { WishStatus } from '../wish/wish.types';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
-
-export function computeGrade(count: number): string {
-  if (count >= 200) return 'legende';
-  if (count >= 100) return 'mecene';
-  if (count >= 50) return 'bienfaiteur';
-  if (count >= 20) return 'eclat';
-  if (count >= 5) return 'lumiere';
-  return 'etincelle';
-}
-
-export function computeGlow(
-  satisfaction: EvaluationSatisfaction,
-  bonus: EvaluationBonus,
-  isAnonymous: boolean,
-): number {
-  const satPoints: Record<EvaluationSatisfaction, number> = {
-    [EvaluationSatisfaction.NEUTRAL]: 10,
-    [EvaluationSatisfaction.HAPPY]: 20,
-    [EvaluationSatisfaction.THRILLED]: 30,
-  };
-  const bonusPoints: Record<EvaluationBonus, number> = {
-    [EvaluationBonus.NONE]: 0,
-    [EvaluationBonus.ON_TIME]: 10,
-    [EvaluationBonus.WENT_ABOVE_AND_BEYOND]: 10,
-  };
-  return satPoints[satisfaction] + bonusPoints[bonus] + (isAnonymous ? 40 : 0);
-}
+import { GlowService } from '../common/glow.service';
+import { NotificationService } from '../notifications/notification.service';
 
 @Injectable()
 export class EvaluationService {
@@ -61,6 +35,8 @@ export class EvaluationService {
     private readonly wishRepo: Repository<Wish>,
     private readonly supabaseStorage: SupabaseStorageService,
     private readonly config: ConfigService,
+    private readonly glowService: GlowService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async evaluate(
@@ -103,7 +79,7 @@ export class EvaluationService {
     const path = `${donationId}/${Date.now()}.${ext}`;
     const proof_url = await this.supabaseStorage.upload(bucket, path, proof);
 
-    const glow_awarded = computeGlow(
+    const glow_awarded = this.glowService.computeGlow(
       dto.satisfaction,
       dto.bonus ?? EvaluationBonus.NONE,
       donation.is_anonymous,
@@ -127,14 +103,29 @@ export class EvaluationService {
       where: { donation: { donor_id: donation.donor_id } },
       relations: { donation: true },
     });
+
+    // Capturer le grade avant mise à jour pour détecter une montée de grade
+    const previousGrade = donor!.grade;
+    const newGrade = this.glowService.computeGrade(count);
     donor!.glow_points += glow_awarded;
-    donor!.grade = computeGrade(count);
+    donor!.grade = newGrade;
     await this.userRepo.save(donor!);
 
     donation.wish.status = WishStatus.FULFILLED;
     await this.wishRepo.save(donation.wish);
 
-    // TODO US-020 — NotificationService.notify(donation.donor_id, { type: 'evaluation_received', glow_awarded })
+    const notificationType =
+      newGrade !== previousGrade ? 'grade_up' : 'evaluation_received';
+    const progression = this.glowService.getGradeProgression(count);
+    await this.notificationService.create(donation.donor_id, notificationType, {
+      glowAwarded: glow_awarded,
+      totalGlowPoints: donor!.glow_points,
+      currentGrade: newGrade,
+      nextGrade: progression.nextGrade,
+      donsManquants: progression.donsManquants,
+    });
+    // TODO US-020 — NotificationService.pushSSE(donation.donor_id, notification)
+
     return evaluation;
   }
 }

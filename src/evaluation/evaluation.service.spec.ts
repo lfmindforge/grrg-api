@@ -7,11 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  EvaluationService,
-  computeGrade,
-  computeGlow,
-} from './evaluation.service';
+import { EvaluationService } from './evaluation.service';
 import { Evaluation } from '../donation/evaluation.entity';
 import { Donation } from '../donation/donation.entity';
 import { User } from '../user/user.entity';
@@ -24,6 +20,8 @@ import {
 } from '../donation/donation.types';
 import { WishStatus } from '../wish/wish.types';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
+import { GlowService } from '../common/glow.service';
+import { NotificationService } from '../notifications/notification.service';
 
 describe('EvaluationService', () => {
   let service: EvaluationService;
@@ -38,6 +36,12 @@ describe('EvaluationService', () => {
   let wishRepo: { save: jest.Mock };
   let supabaseStorage: { upload: jest.Mock };
   let config: { getOrThrow: jest.Mock };
+  let glowService: {
+    computeGlow: jest.Mock;
+    computeGrade: jest.Mock;
+    getGradeProgression: jest.Mock;
+  };
+  let notificationService: { create: jest.Mock };
 
   const RECEIVER_ID = 'receiver-uuid';
   const DONOR_ID = 'donor-uuid';
@@ -97,6 +101,16 @@ describe('EvaluationService', () => {
     wishRepo = { save: jest.fn() };
     supabaseStorage = { upload: jest.fn() };
     config = { getOrThrow: jest.fn() };
+    glowService = {
+      computeGlow: jest.fn().mockReturnValue(30),
+      computeGrade: jest.fn().mockReturnValue('etincelle'),
+      getGradeProgression: jest.fn().mockReturnValue({
+        currentGrade: 'etincelle',
+        nextGrade: 'lumiere',
+        donsManquants: 4,
+      }),
+    };
+    notificationService = { create: jest.fn().mockResolvedValue({}) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -107,56 +121,12 @@ describe('EvaluationService', () => {
         { provide: getRepositoryToken(Wish), useValue: wishRepo },
         { provide: SupabaseStorageService, useValue: supabaseStorage },
         { provide: ConfigService, useValue: config },
+        { provide: GlowService, useValue: glowService },
+        { provide: NotificationService, useValue: notificationService },
       ],
     }).compile();
 
     service = module.get<EvaluationService>(EvaluationService);
-  });
-
-  // ─── computeGrade ────────────────────────────────────────────────────────────
-
-  describe('computeGrade', () => {
-    it.each([
-      [0, 'etincelle'],
-      [4, 'etincelle'],
-      [5, 'lumiere'],
-      [19, 'lumiere'],
-      [20, 'eclat'],
-      [49, 'eclat'],
-      [50, 'bienfaiteur'],
-      [99, 'bienfaiteur'],
-      [100, 'mecene'],
-      [199, 'mecene'],
-      [200, 'legende'],
-    ])('computeGrade(%i) → %s', (count, expected) => {
-      expect(computeGrade(count)).toBe(expected);
-    });
-  });
-
-  // ─── computeGlow ─────────────────────────────────────────────────────────────
-
-  describe('computeGlow', () => {
-    it('neutral + none + non-anon = 10', () => {
-      expect(
-        computeGlow(EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, false),
-      ).toBe(10);
-    });
-
-    it('happy + on_time + non-anon = 30', () => {
-      expect(
-        computeGlow(EvaluationSatisfaction.HAPPY, EvaluationBonus.ON_TIME, false),
-      ).toBe(30);
-    });
-
-    it('thrilled + went_above_and_beyond + anon = 80', () => {
-      expect(
-        computeGlow(
-          EvaluationSatisfaction.THRILLED,
-          EvaluationBonus.WENT_ABOVE_AND_BEYOND,
-          true,
-        ),
-      ).toBe(80);
-    });
   });
 
   // ─── evaluate ────────────────────────────────────────────────────────────────
@@ -196,6 +166,64 @@ describe('EvaluationService', () => {
         expect.objectContaining({ status: WishStatus.FULFILLED }),
       );
       expect(result.glow_awarded).toBe(30);
+    });
+
+    it('crée une notification evaluation_received quand le grade ne change pas', async () => {
+      donationRepo.findOne.mockResolvedValue(mockDonation); // donor.grade = 'etincelle'
+      evaluationRepo.findOne.mockResolvedValue(null);
+      config.getOrThrow.mockReturnValue('evaluations-proof');
+      supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
+      evaluationRepo.create.mockReturnValue(mockEvaluation);
+      evaluationRepo.save.mockResolvedValue(mockEvaluation);
+      userRepo.findOne.mockResolvedValue({ ...mockDonor }); // grade: 'etincelle'
+      evaluationRepo.count.mockResolvedValue(1);
+      glowService.computeGrade.mockReturnValue('etincelle'); // même grade → pas de montée
+      userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
+      wishRepo.save.mockResolvedValue({});
+
+      await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
+
+      expect(notificationService.create).toHaveBeenCalledWith(
+        DONOR_ID,
+        'evaluation_received',
+        expect.objectContaining({ glowAwarded: 30, currentGrade: 'etincelle' }),
+      );
+    });
+
+    it('crée une notification grade_up quand le grade change', async () => {
+      const donorAtEtincelle = { ...mockDonor, grade: 'etincelle', glow_points: 80 };
+      donationRepo.findOne.mockResolvedValue(mockDonation);
+      evaluationRepo.findOne.mockResolvedValue(null);
+      config.getOrThrow.mockReturnValue('evaluations-proof');
+      supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
+      evaluationRepo.create.mockReturnValue(mockEvaluation);
+      evaluationRepo.save.mockResolvedValue(mockEvaluation);
+      userRepo.findOne.mockResolvedValue({ ...donorAtEtincelle });
+      evaluationRepo.count.mockResolvedValue(5); // 5ème don → lumiere
+      glowService.computeGrade.mockReturnValue('lumiere'); // nouveau grade
+      glowService.getGradeProgression.mockReturnValue({
+        currentGrade: 'lumiere',
+        nextGrade: 'eclat',
+        donsManquants: 15,
+      });
+      userRepo.save.mockResolvedValue({
+        ...donorAtEtincelle,
+        glow_points: 110,
+        grade: 'lumiere',
+      });
+      wishRepo.save.mockResolvedValue({});
+
+      await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
+
+      expect(notificationService.create).toHaveBeenCalledWith(
+        DONOR_ID,
+        'grade_up',
+        expect.objectContaining({
+          currentGrade: 'lumiere',
+          nextGrade: 'eclat',
+          donsManquants: 15,
+        }),
+      );
     });
 
     it('lève NotFoundException si la donation est introuvable', async () => {
