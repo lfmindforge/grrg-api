@@ -6,20 +6,25 @@ import {
   Post,
   Get,
   Req,
+  Res,
   UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { Throttle } from '@nestjs/throttler';
 import { LoginDto } from './dto/login.dto';
-import { RefreshDto } from './dto/refresh.dto';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { Public } from '../common/decorators/public.decorator';
+import { ConfigService } from '@nestjs/config';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly config: ConfigService,
+  ) {}
 
   @Post('register')
   @Public()
@@ -33,22 +38,39 @@ export class AuthController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 600_000 } })
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { access_token, refresh_token } = await this.authService.login(dto);
+    this.setRefreshCookie(res, refresh_token);
+    return { access_token };
   }
 
   @Post('refresh')
   @Public()
   @HttpCode(HttpStatus.OK)
-  refresh(@Body() dto: RefreshDto) {
-    return this.authService.refresh(dto.refresh_token);
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const token = req.cookies?.refresh_token as string | undefined;
+    if (!token) throw new UnauthorizedException('No refresh token');
+    const { access_token, refresh_token } = await this.authService.refresh(token);
+    this.setRefreshCookie(res, refresh_token);
+    return { access_token };
   }
 
   @Post('logout')
   @Public()
   @HttpCode(HttpStatus.NO_CONTENT)
-  logout(@Body() dto: RefreshDto) {
-    return this.authService.logout(dto.refresh_token);
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const token = req.cookies?.refresh_token as string | undefined;
+    if (token) await this.authService.logout(token);
+    res.clearCookie('refresh_token', { path: '/', sameSite: 'strict' });
   }
 
   @Get('google')
@@ -62,9 +84,17 @@ export class AuthController {
   @Public()
   @UseGuards(AuthGuard('google'))
   @HttpCode(HttpStatus.OK)
-  googleCallback(@Req() req: Request) {
+  async googleCallback(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     // req.user contient { access_token, refresh_token } passé par GoogleStrategy.validate()
-    return req.user;
+    const { access_token, refresh_token } = req.user as {
+      access_token: string;
+      refresh_token: string;
+    };
+    this.setRefreshCookie(res, refresh_token);
+    return { access_token };
   }
 
   @Get('github')
@@ -78,8 +108,27 @@ export class AuthController {
   @Public()
   @UseGuards(AuthGuard('github'))
   @HttpCode(HttpStatus.OK)
-  githubCallback(@Req() req: Request) {
+  async githubCallback(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     // req.user contient { access_token, refresh_token } passé par GitHubStrategy.validate()
-    return req.user;
+    const { access_token, refresh_token } = req.user as {
+      access_token: string;
+      refresh_token: string;
+    };
+    this.setRefreshCookie(res, refresh_token);
+    return { access_token };
+  }
+
+  // Centralise la configuration du cookie httpOnly pour éviter les répétitions
+  private setRefreshCookie(res: Response, token: string): void {
+    res.cookie('refresh_token', token, {
+      httpOnly: true,
+      secure: this.config.get('NODE_ENV') === 'production',
+      sameSite: 'strict',
+      maxAge: Number(this.config.get('JWT_REFRESH_EXPIRES_MS')),
+      path: '/',
+    });
   }
 }
