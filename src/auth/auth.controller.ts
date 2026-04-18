@@ -56,7 +56,8 @@ export class AuthController {
   ) {
     const token = req.cookies?.refresh_token as string | undefined;
     if (!token) throw new UnauthorizedException('No refresh token');
-    const { access_token, refresh_token } = await this.authService.refresh(token);
+    const { access_token, refresh_token } =
+      await this.authService.refresh(token);
     this.setRefreshCookie(res, refresh_token);
     return { access_token };
   }
@@ -64,10 +65,7 @@ export class AuthController {
   @Post('logout')
   @Public()
   @HttpCode(HttpStatus.NO_CONTENT)
-  async logout(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const token = req.cookies?.refresh_token as string | undefined;
     if (token) await this.authService.logout(token);
     res.clearCookie('refresh_token', { path: '/', sameSite: 'strict' });
@@ -83,18 +81,19 @@ export class AuthController {
   @Get('google/callback')
   @Public()
   @UseGuards(AuthGuard('google'))
-  @HttpCode(HttpStatus.OK)
-  async googleCallback(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    // req.user contient { access_token, refresh_token } passé par GoogleStrategy.validate()
-    const { access_token, refresh_token } = req.user as {
-      access_token: string;
-      refresh_token: string;
+  async googleCallback(@Req() req: Request, @Res() res: Response) {
+    // req.user contient { access_token, refresh_token } ou { error: 'email_conflict' }
+    const user = req.user as {
+      access_token?: string;
+      refresh_token?: string;
+      error?: string;
     };
-    this.setRefreshCookie(res, refresh_token);
-    return { access_token };
+    const frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL');
+    if (user.error) {
+      return res.redirect(`${frontendUrl}/login?error=${user.error}`);
+    }
+    this.setRefreshCookie(res, user.refresh_token!);
+    return res.redirect(`${frontendUrl}/auth/callback`);
   }
 
   @Get('github')
@@ -107,18 +106,19 @@ export class AuthController {
   @Get('github/callback')
   @Public()
   @UseGuards(AuthGuard('github'))
-  @HttpCode(HttpStatus.OK)
-  async githubCallback(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    // req.user contient { access_token, refresh_token } passé par GitHubStrategy.validate()
-    const { access_token, refresh_token } = req.user as {
-      access_token: string;
-      refresh_token: string;
+  async githubCallback(@Req() req: Request, @Res() res: Response) {
+    // req.user contient { access_token, refresh_token } ou { error: 'email_conflict' }
+    const user = req.user as {
+      access_token?: string;
+      refresh_token?: string;
+      error?: string;
     };
-    this.setRefreshCookie(res, refresh_token);
-    return { access_token };
+    const frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL');
+    if (user.error) {
+      return res.redirect(`${frontendUrl}/login?error=${user.error}`);
+    }
+    this.setRefreshCookie(res, user.refresh_token!);
+    return res.redirect(`${frontendUrl}/auth/callback`);
   }
 
   // Centralise la configuration du cookie httpOnly pour éviter les répétitions

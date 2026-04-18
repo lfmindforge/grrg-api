@@ -1,4 +1,4 @@
-import { HttpException, Injectable } from '@nestjs/common';
+import { ConflictException, HttpException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, VerifyCallback } from 'passport-google-oauth20';
@@ -39,8 +39,14 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       });
       done(null, tokens);
     } catch (err) {
-      if (err instanceof HttpException) throw err;
-      done(err as Error, false);
+      if (err instanceof ConflictException) {
+        // Passer l'erreur en payload pour que le controller puisse rediriger proprement
+        done(null, { error: 'email_conflict' } as any);
+      } else if (err instanceof HttpException) {
+        throw err;
+      } else {
+        done(err as Error, false);
+      }
     }
   }
 }
