@@ -154,12 +154,16 @@ describe('WishService', () => {
       );
     });
 
-    it('trie par popularité avec wish.created_at (placeholder — COUNT donations en US-007)', async () => {
+    it('trie par popularité via COUNT des donations sur le souhait', async () => {
       mockQb.getManyAndCount.mockResolvedValue([[], 0]);
 
       await service.findPublic({ sort: 'popularity' });
 
-      expect(mockQb.orderBy).toHaveBeenCalledWith('wish.created_at', 'DESC');
+      expect(mockQb.addSelect).toHaveBeenCalledWith(
+        expect.stringContaining('COUNT(d.id)'),
+        'donations_count',
+      );
+      expect(mockQb.orderBy).toHaveBeenCalledWith('donations_count', 'DESC');
     });
 
     it('applique la pagination : page=2, limit=10 → skip=10, take=10', async () => {

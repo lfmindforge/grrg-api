@@ -60,7 +60,14 @@ export class WishService {
     }
 
     const sortOrder: 'ASC' | 'DESC' = query.order === 'asc' ? 'ASC' : 'DESC';
-    qb.orderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
+    if ((query.sort ?? 'date') === 'popularity') {
+      qb.addSelect(
+        '(SELECT COUNT(d.id) FROM donations d WHERE d.wish_id = wish.id)',
+        'donations_count',
+      ).orderBy('donations_count', sortOrder);
+    } else {
+      qb.orderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
+    }
     qb.skip((page - 1) * limit).take(limit);
 
     const [data, total] = await qb.getManyAndCount();
@@ -89,13 +96,10 @@ export class WishService {
     return { ...entities[0], donated_amount } as unknown as WishPublicDto;
   }
 
-  // Placeholder — remplacer 'popularity' par COUNT(donations) en US-007
   private resolveSortField(sort: string): string {
     switch (sort) {
       case 'amount':
         return 'wish.amount';
-      case 'popularity':
-        return 'wish.created_at';
       default:
         return 'wish.created_at';
     }
