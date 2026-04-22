@@ -132,6 +132,17 @@ export class WishService {
     await this.wishRepo.save(wish);
   }
 
+  async findCategories(): Promise<string[]> {
+    const rows = await this.wishRepo
+      .createQueryBuilder('wish')
+      .select('wish.category', 'category')
+      .distinct(true)
+      .where('wish.is_private = :isPrivate', { isPrivate: false })
+      .orderBy('wish.category', 'ASC')
+      .getRawMany<{ category: string }>();
+    return rows.map((r) => r.category);
+  }
+
   private async findOwnedWishOrThrow(
     id: string,
     userId: string,

@@ -29,8 +29,13 @@ describe('WishService', () => {
     orderBy: jest.Mock;
     skip: jest.Mock;
     take: jest.Mock;
+    select: jest.Mock;
+    distinct: jest.Mock;
+    addSelect: jest.Mock;
     getManyAndCount: jest.Mock;
     getOne: jest.Mock;
+    getRawMany: jest.Mock;
+    getRawAndEntities: jest.Mock;
   };
   let supabaseStorage: { upload: jest.Mock };
 
@@ -42,8 +47,13 @@ describe('WishService', () => {
       orderBy: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
       getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
       getOne: jest.fn().mockResolvedValue(null),
+      getRawMany: jest.fn().mockResolvedValue([]),
+      getRawAndEntities: jest.fn().mockResolvedValue({ entities: [], raw: [] }),
     };
     wishRepo = {
       create: jest.fn(),
@@ -488,6 +498,35 @@ describe('WishService', () => {
       await service.softDelete('uuid-1', 'user-id');
 
       expect(wishRepo.save).not.toHaveBeenCalled();
+    });
+  });
+  // --- findCategories() ---
+
+  describe('findCategories()', () => {
+    it('retourne les catégories distinctes des souhaits publics, triées', async () => {
+      mockQb.getRawMany.mockResolvedValue([
+        { category: 'Électronique' },
+        { category: 'Vêtements' },
+      ]);
+
+      const result = await service.findCategories();
+
+      expect(wishRepo.createQueryBuilder).toHaveBeenCalledWith('wish');
+      expect(mockQb.select).toHaveBeenCalledWith('wish.category', 'category');
+      expect(mockQb.distinct).toHaveBeenCalledWith(true);
+      expect(mockQb.where).toHaveBeenCalledWith(
+        'wish.is_private = :isPrivate',
+        { isPrivate: false },
+      );
+      expect(result).toEqual(['Électronique', 'Vêtements']);
+    });
+
+    it('retourne un tableau vide si aucun souhait public', async () => {
+      mockQb.getRawMany.mockResolvedValue([]);
+
+      const result = await service.findCategories();
+
+      expect(result).toEqual([]);
     });
   });
 });
