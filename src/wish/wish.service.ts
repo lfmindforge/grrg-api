@@ -68,20 +68,25 @@ export class WishService {
   }
 
   async findOne(id: string): Promise<WishPublicDto> {
-    const wish = await this.wishRepo
+    const { entities, raw } = await this.wishRepo
       .createQueryBuilder('wish')
       .leftJoinAndSelect('wish.user', 'user')
+      .addSelect(
+        `(SELECT COALESCE(SUM(d.amount), 0) FROM donations d WHERE d.wish_id = wish.id AND d.status = 'completed')`,
+        'donated_amount',
+      )
       .where('wish.id = :id AND wish.is_private = :isPrivate', {
         id,
         isPrivate: false,
       })
-      .getOne();
+      .getRawAndEntities();
 
-    if (!wish) {
+    if (!entities[0]) {
       throw new NotFoundException('Souhait introuvable');
     }
 
-    return wish as unknown as WishPublicDto;
+    const donated_amount = parseFloat(raw[0]?.donated_amount ?? '0');
+    return { ...entities[0], donated_amount } as unknown as WishPublicDto;
   }
 
   // Placeholder — remplacer 'popularity' par COUNT(donations) en US-007

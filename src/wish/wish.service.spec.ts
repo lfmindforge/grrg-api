@@ -190,31 +190,38 @@ describe('WishService', () => {
       },
     };
 
-    it('retourne le souhait avec le user si trouvé', async () => {
-      mockQb.getOne.mockResolvedValue(mockWish);
+    it('retourne le souhait avec donated_amount calculé depuis les dons completed', async () => {
+      mockQb.getRawAndEntities.mockResolvedValue({
+        entities: [mockWish],
+        raw: [{ donated_amount: '150.00' }],
+      });
 
-      const result: WishPublicDto = await service.findOne('uuid-1');
+      const result = await service.findOne('uuid-1');
 
       expect(wishRepo.createQueryBuilder).toHaveBeenCalledWith('wish');
       expect(mockQb.leftJoinAndSelect).toHaveBeenCalledWith(
         'wish.user',
         'user',
       );
-      expect(result).toEqual(mockWish);
+      expect(result).toMatchObject(mockWish);
+      expect(result.donated_amount).toBe(150);
     });
 
-    it('lève NotFoundException si le souhait est introuvable', async () => {
-      mockQb.getOne.mockResolvedValue(null);
+    it('donated_amount vaut 0 si aucun don confirmé (SUM retourne null)', async () => {
+      mockQb.getRawAndEntities.mockResolvedValue({
+        entities: [mockWish],
+        raw: [{ donated_amount: null }],
+      });
+
+      const result = await service.findOne('uuid-1');
+
+      expect(result.donated_amount).toBe(0);
+    });
+
+    it('lève NotFoundException si le souhait est introuvable ou privé', async () => {
+      mockQb.getRawAndEntities.mockResolvedValue({ entities: [], raw: [] });
 
       await expect(service.findOne('uuid-inexistant')).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it('lève NotFoundException si le souhait est privé (is_private=false dans la query → getOne retourne null)', async () => {
-      mockQb.getOne.mockResolvedValue(null);
-
-      await expect(service.findOne('uuid-prive')).rejects.toThrow(
         NotFoundException,
       );
     });
