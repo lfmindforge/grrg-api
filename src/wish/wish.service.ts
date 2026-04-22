@@ -60,7 +60,14 @@ export class WishService {
     }
 
     const sortOrder: 'ASC' | 'DESC' = query.order === 'asc' ? 'ASC' : 'DESC';
-    qb.orderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
+    if ((query.sort ?? 'date') === 'popularity') {
+      qb.addSelect(
+        '(SELECT COUNT(d.id) FROM donations d WHERE d.wish_id = wish.id)',
+        'donations_count',
+      ).orderBy('donations_count', sortOrder);
+    } else {
+      qb.orderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
+    }
     qb.skip((page - 1) * limit).take(limit);
 
     const [data, total] = await qb.getManyAndCount();
@@ -68,29 +75,31 @@ export class WishService {
   }
 
   async findOne(id: string): Promise<WishPublicDto> {
-    const wish = await this.wishRepo
+    const { entities, raw } = await this.wishRepo
       .createQueryBuilder('wish')
       .leftJoinAndSelect('wish.user', 'user')
+      .addSelect(
+        `(SELECT COALESCE(SUM(d.amount), 0) FROM donations d WHERE d.wish_id = wish.id AND d.status = 'completed')`,
+        'donated_amount',
+      )
       .where('wish.id = :id AND wish.is_private = :isPrivate', {
         id,
         isPrivate: false,
       })
-      .getOne();
+      .getRawAndEntities();
 
-    if (!wish) {
+    if (!entities[0]) {
       throw new NotFoundException('Souhait introuvable');
     }
 
-    return wish as unknown as WishPublicDto;
+    const donated_amount = parseFloat(raw[0]?.donated_amount ?? '0');
+    return { ...entities[0], donated_amount } as unknown as WishPublicDto;
   }
 
-  // Placeholder — remplacer 'popularity' par COUNT(donations) en US-007
   private resolveSortField(sort: string): string {
     switch (sort) {
       case 'amount':
         return 'wish.amount';
-      case 'popularity':
-        return 'wish.created_at';
       default:
         return 'wish.created_at';
     }
@@ -130,6 +139,17 @@ export class WishService {
     if (wish.status === WishStatus.CANCELLED) return;
     wish.status = WishStatus.CANCELLED;
     await this.wishRepo.save(wish);
+  }
+
+  async findCategories(): Promise<string[]> {
+    const rows = await this.wishRepo
+      .createQueryBuilder('wish')
+      .select('wish.category', 'category')
+      .distinct(true)
+      .where('wish.is_private = :isPrivate', { isPrivate: false })
+      .orderBy('wish.category', 'ASC')
+      .getRawMany<{ category: string }>();
+    return rows.map((r) => r.category);
   }
 
   private async findOwnedWishOrThrow(

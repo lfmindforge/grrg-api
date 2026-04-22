@@ -16,6 +16,7 @@ describe('WishController', () => {
     update: jest.Mock;
     softDelete: jest.Mock;
     create: jest.Mock;
+    findCategories: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -26,6 +27,7 @@ describe('WishController', () => {
       update: jest.fn(),
       softDelete: jest.fn(),
       create: jest.fn(),
+      findCategories: jest.fn(),
     };
     const module: TestingModule = await Test.createTestingModule({
       controllers: [WishController],
@@ -159,6 +161,17 @@ describe('WishController', () => {
       await expect(
         pipe.transform('pas-un-uuid', { type: 'param' }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getCategories()', () => {
+    it('appelle WishService.findCategories et retourne le tableau', async () => {
+      service.findCategories.mockResolvedValue(['Électronique', 'Vêtements']);
+
+      const result = await controller.getCategories();
+
+      expect(service.findCategories).toHaveBeenCalled();
+      expect(result).toEqual(['Électronique', 'Vêtements']);
     });
   });
 });

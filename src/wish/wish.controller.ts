@@ -37,6 +37,12 @@ export class WishController {
     return this.wishService.findMine(req.user.id, query);
   }
 
+  @Get('categories')
+  @Public()
+  getCategories() {
+    return this.wishService.findCategories();
+  }
+
   @Get()
   @Public()
   findPublic(@Query() query: QueryWishDto) {

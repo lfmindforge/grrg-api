@@ -29,8 +29,13 @@ describe('WishService', () => {
     orderBy: jest.Mock;
     skip: jest.Mock;
     take: jest.Mock;
+    select: jest.Mock;
+    distinct: jest.Mock;
+    addSelect: jest.Mock;
     getManyAndCount: jest.Mock;
     getOne: jest.Mock;
+    getRawMany: jest.Mock;
+    getRawAndEntities: jest.Mock;
   };
   let supabaseStorage: { upload: jest.Mock };
 
@@ -42,8 +47,13 @@ describe('WishService', () => {
       orderBy: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
       getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
       getOne: jest.fn().mockResolvedValue(null),
+      getRawMany: jest.fn().mockResolvedValue([]),
+      getRawAndEntities: jest.fn().mockResolvedValue({ entities: [], raw: [] }),
     };
     wishRepo = {
       create: jest.fn(),
@@ -144,12 +154,16 @@ describe('WishService', () => {
       );
     });
 
-    it('trie par popularité avec wish.created_at (placeholder — COUNT donations en US-007)', async () => {
+    it('trie par popularité via COUNT des donations sur le souhait', async () => {
       mockQb.getManyAndCount.mockResolvedValue([[], 0]);
 
       await service.findPublic({ sort: 'popularity' });
 
-      expect(mockQb.orderBy).toHaveBeenCalledWith('wish.created_at', 'DESC');
+      expect(mockQb.addSelect).toHaveBeenCalledWith(
+        expect.stringContaining('COUNT(d.id)'),
+        'donations_count',
+      );
+      expect(mockQb.orderBy).toHaveBeenCalledWith('donations_count', 'DESC');
     });
 
     it('applique la pagination : page=2, limit=10 → skip=10, take=10', async () => {
@@ -180,31 +194,38 @@ describe('WishService', () => {
       },
     };
 
-    it('retourne le souhait avec le user si trouvé', async () => {
-      mockQb.getOne.mockResolvedValue(mockWish);
+    it('retourne le souhait avec donated_amount calculé depuis les dons completed', async () => {
+      mockQb.getRawAndEntities.mockResolvedValue({
+        entities: [mockWish],
+        raw: [{ donated_amount: '150.00' }],
+      });
 
-      const result: WishPublicDto = await service.findOne('uuid-1');
+      const result = await service.findOne('uuid-1');
 
       expect(wishRepo.createQueryBuilder).toHaveBeenCalledWith('wish');
       expect(mockQb.leftJoinAndSelect).toHaveBeenCalledWith(
         'wish.user',
         'user',
       );
-      expect(result).toEqual(mockWish);
+      expect(result).toMatchObject(mockWish);
+      expect(result.donated_amount).toBe(150);
     });
 
-    it('lève NotFoundException si le souhait est introuvable', async () => {
-      mockQb.getOne.mockResolvedValue(null);
+    it('donated_amount vaut 0 si aucun don confirmé (SUM retourne null)', async () => {
+      mockQb.getRawAndEntities.mockResolvedValue({
+        entities: [mockWish],
+        raw: [{ donated_amount: null }],
+      });
+
+      const result = await service.findOne('uuid-1');
+
+      expect(result.donated_amount).toBe(0);
+    });
+
+    it('lève NotFoundException si le souhait est introuvable ou privé', async () => {
+      mockQb.getRawAndEntities.mockResolvedValue({ entities: [], raw: [] });
 
       await expect(service.findOne('uuid-inexistant')).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it('lève NotFoundException si le souhait est privé (is_private=false dans la query → getOne retourne null)', async () => {
-      mockQb.getOne.mockResolvedValue(null);
-
-      await expect(service.findOne('uuid-prive')).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -488,6 +509,35 @@ describe('WishService', () => {
       await service.softDelete('uuid-1', 'user-id');
 
       expect(wishRepo.save).not.toHaveBeenCalled();
+    });
+  });
+  // --- findCategories() ---
+
+  describe('findCategories()', () => {
+    it('retourne les catégories distinctes des souhaits publics, triées', async () => {
+      mockQb.getRawMany.mockResolvedValue([
+        { category: 'Électronique' },
+        { category: 'Vêtements' },
+      ]);
+
+      const result = await service.findCategories();
+
+      expect(wishRepo.createQueryBuilder).toHaveBeenCalledWith('wish');
+      expect(mockQb.select).toHaveBeenCalledWith('wish.category', 'category');
+      expect(mockQb.distinct).toHaveBeenCalledWith(true);
+      expect(mockQb.where).toHaveBeenCalledWith(
+        'wish.is_private = :isPrivate',
+        { isPrivate: false },
+      );
+      expect(result).toEqual(['Électronique', 'Vêtements']);
+    });
+
+    it('retourne un tableau vide si aucun souhait public', async () => {
+      mockQb.getRawMany.mockResolvedValue([]);
+
+      const result = await service.findCategories();
+
+      expect(result).toEqual([]);
     });
   });
 });
