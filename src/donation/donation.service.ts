@@ -79,4 +79,14 @@ export class DonationService {
       order: { created_at: 'DESC' },
     });
   }
+
+  async findReceived(userId: string): Promise<Donation[]> {
+    return this.donationRepo
+      .createQueryBuilder('donation')
+      .innerJoinAndSelect('donation.wish', 'wish')
+      .leftJoin('donation.evaluation', 'evaluation')
+      .where('wish.user_id = :userId', { userId })
+      .andWhere('evaluation.id IS NULL')
+      .getMany();
+  }
 }
