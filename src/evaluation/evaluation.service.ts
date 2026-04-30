@@ -12,10 +12,7 @@ import { Evaluation } from '../donation/evaluation.entity';
 import { Donation } from '../donation/donation.entity';
 import { User } from '../user/user.entity';
 import { Wish } from '../wish/wish.entity';
-import {
-  DonationStatus,
-  EvaluationBonus,
-} from '../donation/donation.types';
+import { DonationStatus, EvaluationBonus } from '../donation/donation.types';
 import { WishStatus } from '../wish/wish.types';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
@@ -57,10 +54,9 @@ export class EvaluationService {
       );
     }
 
-    if (donation.status !== DonationStatus.COMPLETED) {
-      throw new BadRequestException(
-        'Le don doit être confirmé avant de pouvoir être évalué',
-      );
+    if (donation.status === DonationStatus.PENDING) {
+      donation.status = DonationStatus.COMPLETED;
+      await this.donationRepo.save(donation);
     }
 
     const existing = await this.evaluationRepo.findOne({

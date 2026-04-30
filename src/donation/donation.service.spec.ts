@@ -14,8 +14,22 @@ import { CreateDonationDto } from './dto/create-donation.dto';
 
 describe('DonationService', () => {
   let service: DonationService;
-  let donationRepo: { create: jest.Mock; save: jest.Mock; findOne: jest.Mock; find: jest.Mock };
+  let donationRepo: {
+    create: jest.Mock;
+    save: jest.Mock;
+    findOne: jest.Mock;
+    find: jest.Mock;
+    createQueryBuilder: jest.Mock;
+  };
   let wishRepo: { findOne: jest.Mock };
+
+  let mockQb: {
+    innerJoinAndSelect: jest.Mock;
+    leftJoin: jest.Mock;
+    where: jest.Mock;
+    andWhere: jest.Mock;
+    getMany: jest.Mock;
+  };
 
   const DONOR_ID = 'donor-uuid';
   const OWNER_ID = 'owner-uuid';
@@ -28,7 +42,20 @@ describe('DonationService', () => {
   } as Wish;
 
   beforeEach(async () => {
-    donationRepo = { create: jest.fn(), save: jest.fn(), findOne: jest.fn(), find: jest.fn() };
+    mockQb = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn(),
+    };
+    donationRepo = {
+      create: jest.fn(),
+      save: jest.fn(),
+      findOne: jest.fn(),
+      find: jest.fn(),
+      createQueryBuilder: jest.fn().mockReturnValue(mockQb),
+    };
     wishRepo = { findOne: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -203,7 +230,10 @@ describe('DonationService', () => {
     } as Donation;
 
     it('transitions une donation pending vers completed', async () => {
-      const saved = { ...mockDonationPending, status: DonationStatus.COMPLETED };
+      const saved = {
+        ...mockDonationPending,
+        status: DonationStatus.COMPLETED,
+      };
       donationRepo.findOne.mockResolvedValue(mockDonationPending);
       donationRepo.save.mockResolvedValue(saved);
 
@@ -255,7 +285,7 @@ describe('DonationService', () => {
           donor_id: DONOR_ID,
           wish: {
             id: WISH_ID,
-            title: 'Je rêve d\'un vélo',
+            title: "Je rêve d'un vélo",
             category: 'sport',
             media_urls: ['https://img.jpg'],
           },
@@ -285,7 +315,12 @@ describe('DonationService', () => {
         {
           id: 'don-1',
           donor_id: DONOR_ID,
-          wish: { id: WISH_ID, title: 'Souhait', category: 'sport', media_urls: [] },
+          wish: {
+            id: WISH_ID,
+            title: 'Souhait',
+            category: 'sport',
+            media_urls: [],
+          },
           evaluation: null,
           status: DonationStatus.PENDING,
           created_at: new Date(),
@@ -302,6 +337,49 @@ describe('DonationService', () => {
       donationRepo.find.mockResolvedValue([]);
 
       const result = await service.findMyDonations(DONOR_ID);
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('findReceived', () => {
+    const OWNER_ID = 'owner-uuid';
+
+    it('retourne les donations non évaluées des souhaits du receveur', async () => {
+      const donations = [
+        {
+          id: 'don-1',
+          wish_id: WISH_ID,
+          wish: { id: WISH_ID, title: 'Je veux un vélo' },
+          type: DonationType.FINANCIAL,
+          is_anonymous: false,
+          status: DonationStatus.PENDING,
+        },
+      ];
+      mockQb.getMany.mockResolvedValue(donations);
+
+      const result = await service.findReceived(OWNER_ID);
+
+      expect(donationRepo.createQueryBuilder).toHaveBeenCalledWith('donation');
+      expect(mockQb.innerJoinAndSelect).toHaveBeenCalledWith(
+        'donation.wish',
+        'wish',
+      );
+      expect(mockQb.leftJoin).toHaveBeenCalledWith(
+        'donation.evaluation',
+        'evaluation',
+      );
+      expect(mockQb.where).toHaveBeenCalledWith('wish.user_id = :userId', {
+        userId: OWNER_ID,
+      });
+      expect(mockQb.andWhere).toHaveBeenCalledWith('evaluation.id IS NULL');
+      expect(result).toEqual(donations);
+    });
+
+    it('retourne un tableau vide si aucun don non évalué', async () => {
+      mockQb.getMany.mockResolvedValue([]);
+
+      const result = await service.findReceived(OWNER_ID);
 
       expect(result).toEqual([]);
     });

@@ -36,6 +36,12 @@ export class DonationController {
     return this.donationService.confirm(req.user.id, id);
   }
 
+  @Get('received')
+  @HttpCode(HttpStatus.OK)
+  findReceived(@Req() req: Request & { user: { id: string } }) {
+    return this.donationService.findReceived(req.user.id);
+  }
+
   @Get('me')
   @HttpCode(HttpStatus.OK)
   findMyDonations(@Req() req: Request & { user: { id: string } }) {

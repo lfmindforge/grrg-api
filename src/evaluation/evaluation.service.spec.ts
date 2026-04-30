@@ -31,7 +31,7 @@ describe('EvaluationService', () => {
     save: jest.Mock;
     count: jest.Mock;
   };
-  let donationRepo: { findOne: jest.Mock };
+  let donationRepo: { findOne: jest.Mock; save: jest.Mock };
   let userRepo: { findOne: jest.Mock; save: jest.Mock };
   let wishRepo: { save: jest.Mock };
   let supabaseStorage: { upload: jest.Mock };
@@ -96,7 +96,7 @@ describe('EvaluationService', () => {
       save: jest.fn(),
       count: jest.fn(),
     };
-    donationRepo = { findOne: jest.fn() };
+    donationRepo = { findOne: jest.fn(), save: jest.fn() };
     userRepo = { findOne: jest.fn(), save: jest.fn() };
     wishRepo = { save: jest.fn() };
     supabaseStorage = { upload: jest.fn() };
@@ -191,7 +191,11 @@ describe('EvaluationService', () => {
     });
 
     it('crée une notification grade_up quand le grade change', async () => {
-      const donorAtEtincelle = { ...mockDonor, grade: 'etincelle', glow_points: 80 };
+      const donorAtEtincelle = {
+        ...mockDonor,
+        grade: 'etincelle',
+        glow_points: 80,
+      };
       donationRepo.findOne.mockResolvedValue(mockDonation);
       evaluationRepo.findOne.mockResolvedValue(null);
       config.getOrThrow.mockReturnValue('evaluations-proof');
@@ -242,15 +246,32 @@ describe('EvaluationService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it("lève BadRequestException si la donation n'est pas completed", async () => {
-      donationRepo.findOne.mockResolvedValue({
+    it("auto-confirme une donation pending avant de créer l'évaluation", async () => {
+      const pendingDonation = {
         ...mockDonation,
         status: DonationStatus.PENDING,
+      };
+      donationRepo.findOne.mockResolvedValue(pendingDonation);
+      donationRepo.save.mockResolvedValue({
+        ...pendingDonation,
+        status: DonationStatus.COMPLETED,
       });
+      evaluationRepo.findOne.mockResolvedValue(null);
+      config.getOrThrow.mockReturnValue('evaluations-proof');
+      supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
+      evaluationRepo.create.mockReturnValue(mockEvaluation);
+      evaluationRepo.save.mockResolvedValue(mockEvaluation);
+      userRepo.findOne.mockResolvedValue({ ...mockDonor });
+      evaluationRepo.count.mockResolvedValue(1);
+      userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
+      wishRepo.save.mockResolvedValue({});
 
-      await expect(
-        service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile),
-      ).rejects.toThrow(BadRequestException);
+      await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
+
+      expect(donationRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status: DonationStatus.COMPLETED }),
+      );
+      expect(evaluationRepo.save).toHaveBeenCalled();
     });
 
     it('lève ConflictException si une évaluation existe déjà', async () => {

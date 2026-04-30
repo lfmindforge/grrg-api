@@ -11,6 +11,7 @@ describe('DonationController', () => {
     propose: jest.Mock;
     confirm: jest.Mock;
     findMyDonations: jest.Mock;
+    findReceived: jest.Mock;
   };
 
   const DONOR_ID = 'donor-uuid';
@@ -20,6 +21,7 @@ describe('DonationController', () => {
       propose: jest.fn(),
       confirm: jest.fn(),
       findMyDonations: jest.fn(),
+      findReceived: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -70,6 +72,27 @@ describe('DonationController', () => {
       const result = await controller.findMyDonations(mockReq);
 
       expect(service.findMyDonations).toHaveBeenCalledWith(DONOR_ID);
+      expect(result).toEqual(expected);
+    });
+  });
+
+  describe('GET /donations/received', () => {
+    it('appelle service.findReceived avec userId et retourne la liste', async () => {
+      const mockReq = { user: { id: DONOR_ID } } as any;
+      const expected = [
+        {
+          id: 'don-1',
+          wish: { id: 'wish-uuid', title: 'Un vélo' },
+          type: DonationType.FINANCIAL,
+          is_anonymous: false,
+          status: DonationStatus.PENDING,
+        },
+      ];
+      service.findReceived.mockResolvedValue(expected);
+
+      const result = await controller.findReceived(mockReq);
+
+      expect(service.findReceived).toHaveBeenCalledWith(DONOR_ID);
       expect(result).toEqual(expected);
     });
   });
