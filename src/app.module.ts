@@ -12,6 +12,7 @@ import { DonationModule } from './donation/donation.module';
 import { EvaluationModule } from './evaluation/evaluation.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
+import KeyvRedis from '@keyv/redis';
 
 @Module({
   imports: [
@@ -31,7 +32,15 @@ import { LeaderboardModule } from './leaderboard/leaderboard.module';
     //Config global, la route login ovveride @throttle (5/10min)
     ThrottlerModule.forRoot([{ name: 'default', ttl: 600_000, limit: 100 }]),
     // Cache in-memory global — TTL 60s par défaut, overridable par cache.set(key, val, ttl)
-    CacheModule.register({ isGlobal: true, ttl: 60_000 }),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      useFactory: () => ({
+        ttl: 60_000,
+        stores: [
+          new KeyvRedis(process.env.REDIS_URL ?? 'redis://localhost:6379'),
+        ],
+      }),
+    }),
     UserModule,
     AuthModule,
     WishModule,
