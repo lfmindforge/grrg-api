@@ -68,7 +68,12 @@ export class AuthController {
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const token = req.cookies?.refresh_token as string | undefined;
     if (token) await this.authService.logout(token);
-    res.clearCookie('refresh_token', { path: '/', sameSite: 'strict' });
+    res.clearCookie('refresh_token', {
+      path: '/',
+      sameSite:
+        this.config.get('NODE_ENV') === 'production' ? 'none' : 'strict',
+      secure: this.config.get('NODE_ENV') === 'production',
+    });
   }
 
   @Get('google')
@@ -126,7 +131,8 @@ export class AuthController {
     res.cookie('refresh_token', token, {
       httpOnly: true,
       secure: this.config.get('NODE_ENV') === 'production',
-      sameSite: 'strict',
+      sameSite:
+        this.config.get('NODE_ENV') === 'production' ? 'none' : 'strict',
       maxAge: Number(this.config.get('JWT_REFRESH_EXPIRES_MS')),
       path: '/',
     });
