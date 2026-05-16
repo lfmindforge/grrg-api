@@ -3,6 +3,7 @@ import {
   EvaluationBonus,
   EvaluationSatisfaction,
 } from '../donation/donation.types';
+import { DonationType } from '../wish/wish.types';
 
 describe('GlowService', () => {
   let service: GlowService;
@@ -32,15 +33,16 @@ describe('GlowService', () => {
 
   describe('computeGlow', () => {
     it.each([
-      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, false, 10],
-      [EvaluationSatisfaction.HAPPY, EvaluationBonus.NONE, false, 20],
-      [EvaluationSatisfaction.THRILLED, EvaluationBonus.NONE, false, 30],
-      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.ON_TIME, false, 20],
-      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.WENT_ABOVE_AND_BEYOND, false, 20],
-      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, true, 50],
-      [EvaluationSatisfaction.THRILLED, EvaluationBonus.WENT_ABOVE_AND_BEYOND, true, 80],
-    ])('%s + %s + anon=%s → %i', (sat, bonus, anon, expected) => {
-      expect(service.computeGlow(sat, bonus, anon)).toBe(expected);
+      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, false, DonationType.FINANCIAL, 20],
+      [EvaluationSatisfaction.HAPPY, EvaluationBonus.NONE, false, DonationType.FINANCIAL, 30],
+      [EvaluationSatisfaction.THRILLED, EvaluationBonus.NONE, false, DonationType.FINANCIAL, 40],
+      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.ON_TIME, false, DonationType.FINANCIAL, 30],
+      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, true, DonationType.FINANCIAL, 60],
+      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, false, DonationType.DELIVERY, 30],
+      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, false, DonationType.IN_PERSON, 45],
+      [EvaluationSatisfaction.THRILLED, EvaluationBonus.WENT_ABOVE_AND_BEYOND, true, DonationType.IN_PERSON, 115],
+    ])('%s + %s + anon=%s + %s → %i', (sat, bonus, anon, type, expected) => {
+      expect(service.computeGlow(sat, bonus, anon, type)).toBe(expected);
     });
   });
 
