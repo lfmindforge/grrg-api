@@ -18,7 +18,11 @@ const mockWishRepo = {
   find: jest.fn(),
 };
 
-const mockStorage = { upload: jest.fn() };
+const mockStorage = {
+  upload: jest.fn(),
+  delete: jest.fn().mockResolvedValue(undefined),
+  extractPath: jest.fn().mockReturnValue('user-id/old-avatar.jpg'),
+};
 
 describe('UserService', () => {
   let service: UserService;
@@ -306,6 +310,31 @@ describe('UserService', () => {
         expect.objectContaining({ avatar_url: avatarUrl }),
       );
       expect(result.avatar_url).toBe(avatarUrl);
+    });
+
+    it("supprime l'ancien avatar avant d'uploader le nouveau", async () => {
+      const userWithAvatar = {
+        ...existingUser,
+        avatar_url: 'https://cdn.supabase.co/storage/v1/object/public/avatars/user-id/old-avatar.jpg',
+      };
+      const file = {
+        buffer: Buffer.from('img'),
+        mimetype: 'image/jpeg',
+        originalname: 'new.jpg',
+      } as Express.Multer.File;
+      const newUrl = 'https://cdn.supabase.co/avatars/user-id/new.jpg';
+      mockStorage.upload.mockResolvedValue(newUrl);
+      mockStorage.extractPath.mockReturnValue('user-id/old-avatar.jpg');
+      mockUserRepo.findOne
+        .mockResolvedValueOnce(userWithAvatar)
+        .mockResolvedValueOnce({ ...userWithAvatar, avatar_url: newUrl });
+      mockUserRepo.save.mockResolvedValue({ ...userWithAvatar, avatar_url: newUrl });
+      mockWishRepo.find.mockResolvedValue([]);
+
+      await service.updateMe('user-id', {}, file);
+
+      expect(mockStorage.delete).toHaveBeenCalledWith('avatars', ['user-id/old-avatar.jpg']);
+      expect(mockStorage.upload).toHaveBeenCalled();
     });
 
     it('sans pseudo ni fichier → sauvegarde et retourne profil inchangé', async () => {

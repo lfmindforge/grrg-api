@@ -93,6 +93,10 @@ export class UserService {
 
     if (file) {
       const bucket = this.config.getOrThrow<string>('SUPABASE_BUCKET_AVATARS');
+      if (user!.avatar_url) {
+        const oldPath = this.supabaseStorage.extractPath(bucket, user!.avatar_url);
+        if (oldPath) await this.supabaseStorage.delete(bucket, [oldPath]);
+      }
       const ext = file.originalname.split('.').pop() ?? 'bin';
       const path = `${userId}/${Date.now()}.${ext}`;
       user!.avatar_url = await this.supabaseStorage.upload(bucket, path, file);

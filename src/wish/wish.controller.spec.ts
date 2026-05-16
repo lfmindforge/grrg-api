@@ -136,9 +136,9 @@ describe('WishController', () => {
       const updatedWish = { id: 'uuid-1', title: 'Nouveau titre' };
       service.update.mockResolvedValue(updatedWish);
 
-      const result = await controller.update('uuid-1', mockReq, dto);
+      const result = await controller.update('uuid-1', mockReq, dto, undefined);
 
-      expect(service.update).toHaveBeenCalledWith('uuid-1', 'user-id', dto);
+      expect(service.update).toHaveBeenCalledWith('uuid-1', 'user-id', dto, undefined);
       expect(result).toEqual(updatedWish);
     });
   });
