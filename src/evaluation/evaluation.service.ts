@@ -79,6 +79,7 @@ export class EvaluationService {
       dto.satisfaction,
       dto.bonus ?? EvaluationBonus.NONE,
       donation.is_anonymous,
+      donation.type,
     );
 
     const evaluation = await this.evaluationRepo.save(

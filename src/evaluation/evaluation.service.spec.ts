@@ -18,7 +18,7 @@ import {
   EvaluationBonus,
   EvaluationSatisfaction,
 } from '../donation/donation.types';
-import { WishStatus } from '../wish/wish.types';
+import { DonationType, WishStatus } from '../wish/wish.types';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import { GlowService } from '../common/glow.service';
 import { NotificationService } from '../notifications/notification.service';
@@ -51,6 +51,7 @@ describe('EvaluationService', () => {
   const mockDonation = {
     id: DONATION_ID,
     donor_id: DONOR_ID,
+    type: DonationType.DELIVERY,
     is_anonymous: false,
     status: DonationStatus.COMPLETED,
     wish: {
@@ -158,6 +159,12 @@ describe('EvaluationService', () => {
         mockFile,
       );
 
+      expect(glowService.computeGlow).toHaveBeenCalledWith(
+        baseDto.satisfaction,
+        baseDto.bonus,
+        false,
+        DonationType.DELIVERY,
+      );
       expect(evaluationRepo.save).toHaveBeenCalled();
       expect(userRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ glow_points: 130, grade: 'etincelle' }),

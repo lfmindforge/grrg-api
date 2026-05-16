@@ -1,4 +1,4 @@
-import { DonationType, WishStatus } from '../wish.types';
+import { WishStatus } from '../wish.types';
 
 export interface UserPublicDto {
   id: string;
@@ -14,8 +14,6 @@ export interface WishPublicDto {
   title: string;
   description: string;
   category: string;
-  donation_type: DonationType;
-  amount: number | null;
   is_private: boolean;
   media_urls: string[];
   status: WishStatus;

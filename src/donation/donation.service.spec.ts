@@ -21,7 +21,7 @@ describe('DonationService', () => {
     find: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
-  let wishRepo: { findOne: jest.Mock };
+  let wishRepo: { findOne: jest.Mock; save: jest.Mock };
 
   let mockQb: {
     innerJoinAndSelect: jest.Mock;
@@ -56,7 +56,7 @@ describe('DonationService', () => {
       find: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(mockQb),
     };
-    wishRepo = { findOne: jest.fn() };
+    wishRepo = { findOne: jest.fn(), save: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -83,9 +83,10 @@ describe('DonationService', () => {
         donor_id: DONOR_ID,
         status: DonationStatus.PENDING,
       };
-      wishRepo.findOne.mockResolvedValue(mockWish);
+      wishRepo.findOne.mockResolvedValue({ ...mockWish });
       donationRepo.create.mockReturnValue(created);
       donationRepo.save.mockResolvedValue(created);
+      wishRepo.save.mockResolvedValue({ ...mockWish, status: WishStatus.IN_PROGRESS });
 
       const result = await service.propose(DONOR_ID, dto);
 
@@ -133,7 +134,7 @@ describe('DonationService', () => {
     });
 
     it('lève ForbiddenException si le donateur est le créateur du souhait', async () => {
-      wishRepo.findOne.mockResolvedValue(mockWish);
+      wishRepo.findOne.mockResolvedValue({ ...mockWish });
       const dto: CreateDonationDto = {
         wish_id: WISH_ID,
         type: DonationType.FINANCIAL,
@@ -152,13 +153,14 @@ describe('DonationService', () => {
         amount: 30,
         is_anonymous: true,
       };
-      wishRepo.findOne.mockResolvedValue(mockWish);
+      wishRepo.findOne.mockResolvedValue({ ...mockWish });
       donationRepo.create.mockReturnValue({ ...dto, donor_id: DONOR_ID });
       donationRepo.save.mockResolvedValue({
         ...dto,
         donor_id: DONOR_ID,
         status: DonationStatus.PENDING,
       });
+      wishRepo.save.mockResolvedValue({ ...mockWish, status: WishStatus.IN_PROGRESS });
 
       await service.propose(DONOR_ID, dto);
 
@@ -173,9 +175,10 @@ describe('DonationService', () => {
         type: DonationType.DELIVERY,
         nature_description: 'Un vélo',
       };
-      wishRepo.findOne.mockResolvedValue(mockWish);
+      wishRepo.findOne.mockResolvedValue({ ...mockWish });
       donationRepo.create.mockReturnValue({ ...dto, donor_id: DONOR_ID });
       donationRepo.save.mockResolvedValue({ ...dto, donor_id: DONOR_ID });
+      wishRepo.save.mockResolvedValue({ ...mockWish, status: WishStatus.IN_PROGRESS });
 
       await service.propose(DONOR_ID, dto);
 
@@ -193,13 +196,14 @@ describe('DonationService', () => {
         type: DonationType.IN_PERSON,
         nature_description: 'Cours de guitare',
       };
-      wishRepo.findOne.mockResolvedValue(mockWish);
+      wishRepo.findOne.mockResolvedValue({ ...mockWish });
       donationRepo.create.mockReturnValue({ ...dto, donor_id: DONOR_ID });
       donationRepo.save.mockResolvedValue({
         ...dto,
         donor_id: DONOR_ID,
         status: DonationStatus.PENDING,
       });
+      wishRepo.save.mockResolvedValue({ ...mockWish, status: WishStatus.IN_PROGRESS });
 
       await service.propose(DONOR_ID, dto);
 
@@ -209,6 +213,33 @@ describe('DonationService', () => {
           nature_description: 'Cours de guitare',
           type: DonationType.IN_PERSON,
         }),
+      );
+    });
+
+    it('passe le souhait en IN_PROGRESS après avoir enregistré le don', async () => {
+      const dto: CreateDonationDto = {
+        wish_id: WISH_ID,
+        type: DonationType.FINANCIAL,
+        amount: 50,
+      };
+      const created = {
+        id: 'don-uuid',
+        ...dto,
+        donor_id: DONOR_ID,
+        status: DonationStatus.PENDING,
+      };
+      wishRepo.findOne.mockResolvedValue(mockWish);
+      donationRepo.create.mockReturnValue(created);
+      donationRepo.save.mockResolvedValue(created);
+      wishRepo.save.mockResolvedValue({
+        ...mockWish,
+        status: WishStatus.IN_PROGRESS,
+      });
+
+      await service.propose(DONOR_ID, dto);
+
+      expect(wishRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status: WishStatus.IN_PROGRESS }),
       );
     });
   });

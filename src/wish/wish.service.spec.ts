@@ -7,7 +7,7 @@ import { SupabaseStorageService } from '../common/storage/supabase-storage.servi
 import { CreateWishDto } from './dto/create-wish.dto';
 import { QueryWishDto } from './dto/query-wish.dto';
 import { PaginatedWishesDto, WishPublicDto } from './dto/wish-response.dto';
-import { DonationType, WishStatus } from './wish.types';
+import { WishStatus } from './wish.types';
 import {
   ForbiddenException,
   InternalServerErrorException,
@@ -37,7 +37,7 @@ describe('WishService', () => {
     getRawMany: jest.Mock;
     getRawAndEntities: jest.Mock;
   };
-  let supabaseStorage: { upload: jest.Mock };
+  let supabaseStorage: { upload: jest.Mock; delete: jest.Mock; extractPath: jest.Mock };
 
   beforeEach(async () => {
     mockQb = {
@@ -61,7 +61,11 @@ describe('WishService', () => {
       findOne: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(mockQb),
     };
-    supabaseStorage = { upload: jest.fn() };
+    supabaseStorage = {
+      upload: jest.fn(),
+      delete: jest.fn().mockResolvedValue(undefined),
+      extractPath: jest.fn().mockReturnValue('user-id/photo.jpg'),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -129,17 +133,6 @@ describe('WishService', () => {
       expect(mockQb.andWhere).toHaveBeenCalledWith(
         'LOWER(wish.category) = LOWER(:category)',
         { category: 'Électronique' },
-      );
-    });
-
-    it('filtre par donation_type', async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
-      await service.findPublic({ donation_type: DonationType.DELIVERY });
-
-      expect(mockQb.andWhere).toHaveBeenCalledWith(
-        'wish.donation_type = :donationType',
-        { donationType: DonationType.DELIVERY },
       );
     });
 
@@ -238,7 +231,6 @@ describe('WishService', () => {
       title: 'Mon souhait',
       description: 'Un beau souhait',
       category: 'Électronique',
-      donation_type: DonationType.FINANCIAL,
     };
 
     const mockFile = {
@@ -266,7 +258,6 @@ describe('WishService', () => {
           user_id: 'user-id',
           media_urls: [],
           status: WishStatus.PENDING,
-          amount: null,
           is_private: false,
         }),
       );
@@ -314,15 +305,14 @@ describe('WishService', () => {
       expect(wishRepo.save).not.toHaveBeenCalled();
     });
 
-    it('avec amount et is_private : les valeurs sont transmises à la DB', async () => {
-      const dtoWithAmount: CreateWishDto = {
+    it('avec is_private : la valeur est transmise à la DB', async () => {
+      const dtoWithPrivate: CreateWishDto = {
         ...dto,
-        amount: 50,
         is_private: true,
       };
       const savedWish = {
         id: 'uuid-2',
-        ...dtoWithAmount,
+        ...dtoWithPrivate,
         user_id: 'user-id',
         media_urls: [],
         status: WishStatus.PENDING,
@@ -330,10 +320,10 @@ describe('WishService', () => {
       wishRepo.create.mockReturnValue(savedWish);
       wishRepo.save.mockResolvedValue(savedWish);
 
-      await service.create('user-id', dtoWithAmount, []);
+      await service.create('user-id', dtoWithPrivate, []);
 
       expect(wishRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 50, is_private: true }),
+        expect.objectContaining({ is_private: true }),
       );
     });
   });
@@ -455,6 +445,81 @@ describe('WishService', () => {
 
       expect(result).toEqual(updatedWish);
     });
+
+    it('avec fichier + status PENDING : upload et remplace media_urls', async () => {
+      const oldUrl = 'https://proj.supabase.co/storage/v1/object/public/wishes-media/user-id/old.jpg';
+      const wish = {
+        id: 'uuid-1',
+        user_id: 'user-id',
+        status: WishStatus.PENDING,
+        media_urls: [oldUrl],
+      };
+      const file = {
+        buffer: Buffer.from('img'),
+        mimetype: 'image/jpeg',
+        originalname: 'new.jpg',
+      } as Express.Multer.File;
+      const newUrl = 'https://proj.supabase.co/storage/v1/object/public/wishes-media/user-id/new.jpg';
+      wishRepo.findOne.mockResolvedValue(wish);
+      supabaseStorage.extractPath.mockReturnValue('user-id/old.jpg');
+      supabaseStorage.upload.mockResolvedValue(newUrl);
+      wishRepo.save.mockImplementation((w) => Promise.resolve(w));
+
+      await service.update('uuid-1', 'user-id', {}, file);
+
+      expect(supabaseStorage.delete).toHaveBeenCalledWith('wishes-media', ['user-id/old.jpg']);
+      expect(supabaseStorage.upload).toHaveBeenCalledWith(
+        'wishes-media',
+        expect.stringMatching(/^user-id\/.+\.jpg$/),
+        file,
+      );
+      expect(wishRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ media_urls: [newUrl] }),
+      );
+    });
+
+    it('avec fichier mais status != PENDING : ignore le fichier', async () => {
+      const wish = {
+        id: 'uuid-1',
+        user_id: 'user-id',
+        status: WishStatus.IN_PROGRESS,
+        media_urls: ['https://cdn.example.com/existing.jpg'],
+      };
+      const file = {
+        buffer: Buffer.from('img'),
+        mimetype: 'image/jpeg',
+        originalname: 'new.jpg',
+      } as Express.Multer.File;
+      wishRepo.findOne.mockResolvedValue(wish);
+      wishRepo.save.mockImplementation((w) => Promise.resolve(w));
+
+      await service.update('uuid-1', 'user-id', {}, file);
+
+      expect(supabaseStorage.upload).not.toHaveBeenCalled();
+      expect(supabaseStorage.delete).not.toHaveBeenCalled();
+    });
+
+    it('avec fichier + PENDING sans ancienne image : upload sans delete', async () => {
+      const wish = {
+        id: 'uuid-1',
+        user_id: 'user-id',
+        status: WishStatus.PENDING,
+        media_urls: [],
+      };
+      const file = {
+        buffer: Buffer.from('img'),
+        mimetype: 'image/jpeg',
+        originalname: 'photo.jpg',
+      } as Express.Multer.File;
+      supabaseStorage.upload.mockResolvedValue('https://cdn.example.com/photo.jpg');
+      wishRepo.findOne.mockResolvedValue(wish);
+      wishRepo.save.mockImplementation((w) => Promise.resolve(w));
+
+      await service.update('uuid-1', 'user-id', {}, file);
+
+      expect(supabaseStorage.delete).not.toHaveBeenCalled();
+      expect(supabaseStorage.upload).toHaveBeenCalled();
+    });
   });
 
   // --- softDelete() ---
@@ -504,11 +569,50 @@ describe('WishService', () => {
         id: 'uuid-1',
         user_id: 'user-id',
         status: WishStatus.CANCELLED,
+        media_urls: [],
       });
 
       await service.softDelete('uuid-1', 'user-id');
 
       expect(wishRepo.save).not.toHaveBeenCalled();
+      expect(supabaseStorage.delete).not.toHaveBeenCalled();
+    });
+
+    it('supprime les médias du bucket avant de passer en CANCELLED', async () => {
+      const mediaUrl = 'https://proj.supabase.co/storage/v1/object/public/wishes-media/user-id/photo.jpg';
+      wishRepo.findOne.mockResolvedValue({
+        id: 'uuid-1',
+        user_id: 'user-id',
+        status: WishStatus.PENDING,
+        media_urls: [mediaUrl],
+      });
+      supabaseStorage.extractPath.mockReturnValue('user-id/photo.jpg');
+      wishRepo.save.mockResolvedValue({});
+
+      await service.softDelete('uuid-1', 'user-id');
+
+      expect(supabaseStorage.extractPath).toHaveBeenCalledWith('wishes-media', mediaUrl);
+      expect(supabaseStorage.delete).toHaveBeenCalledWith('wishes-media', ['user-id/photo.jpg']);
+      expect(wishRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status: WishStatus.CANCELLED }),
+      );
+    });
+
+    it('sans médias — ne tente pas de delete sur le bucket', async () => {
+      wishRepo.findOne.mockResolvedValue({
+        id: 'uuid-1',
+        user_id: 'user-id',
+        status: WishStatus.PENDING,
+        media_urls: [],
+      });
+      wishRepo.save.mockResolvedValue({});
+
+      await service.softDelete('uuid-1', 'user-id');
+
+      expect(supabaseStorage.delete).not.toHaveBeenCalled();
+      expect(wishRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status: WishStatus.CANCELLED }),
+      );
     });
   });
   // --- findCategories() ---

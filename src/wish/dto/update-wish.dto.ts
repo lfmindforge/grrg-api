@@ -1,14 +1,5 @@
-import {
-  IsBoolean,
-  IsEnum,
-  IsNumber,
-  IsOptional,
-  IsString,
-  MaxLength,
-  Min,
-  ValidateIf,
-} from 'class-validator';
-import { DonationType } from '../wish.types';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class UpdateWishDto {
   @IsOptional()
@@ -25,18 +16,9 @@ export class UpdateWishDto {
   @MaxLength(50)
   category?: string;
 
+  // Multipart envoie "true"/"false" en string — @Transform normalise en boolean
   @IsOptional()
-  @IsEnum(DonationType)
-  donation_type?: DonationType;
-
-  // ValidateIf ignore la validation si null (null = retirer le montant)
-  @IsOptional()
-  @ValidateIf((o) => o.amount !== null)
-  @IsNumber()
-  @Min(0)
-  amount?: number | null;
-
-  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   is_private?: boolean;
 }

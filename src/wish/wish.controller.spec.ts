@@ -4,7 +4,7 @@ import { WishController } from './wish.controller';
 import { WishService } from './wish.service';
 import { CreateWishDto } from './dto/create-wish.dto';
 import { QueryWishDto } from './dto/query-wish.dto';
-import { DonationType, WishStatus } from './wish.types';
+import { WishStatus } from './wish.types';
 import { UpdateWishDto } from './dto/update-wish.dto';
 
 describe('WishController', () => {
@@ -79,7 +79,6 @@ describe('WishController', () => {
         title: 'Mon souhait',
         description: 'Description du souhait',
         category: 'Vêtements',
-        donation_type: DonationType.DELIVERY,
       };
       const mockReq = { user: { id: 'user-id-123' } } as any;
       const mockFiles: Express.Multer.File[] = [];
@@ -87,7 +86,6 @@ describe('WishController', () => {
         id: 'uuid-1',
         user_id: 'user-id-123',
         ...dto,
-        amount: null,
         is_private: false,
         media_urls: [],
         status: WishStatus.PENDING,
@@ -107,7 +105,6 @@ describe('WishController', () => {
         title: 'Souhait sans médias',
         description: 'Desc',
         category: 'Autre',
-        donation_type: DonationType.IN_PERSON,
       };
       const mockReq = { user: { id: 'user-id-456' } } as any;
       service.create.mockResolvedValue({});
@@ -139,9 +136,9 @@ describe('WishController', () => {
       const updatedWish = { id: 'uuid-1', title: 'Nouveau titre' };
       service.update.mockResolvedValue(updatedWish);
 
-      const result = await controller.update('uuid-1', mockReq, dto);
+      const result = await controller.update('uuid-1', mockReq, dto, undefined);
 
-      expect(service.update).toHaveBeenCalledWith('uuid-1', 'user-id', dto);
+      expect(service.update).toHaveBeenCalledWith('uuid-1', 'user-id', dto, undefined);
       expect(result).toEqual(updatedWish);
     });
   });
