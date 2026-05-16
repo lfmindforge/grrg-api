@@ -9,10 +9,9 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { DonationType, WishStatus } from '../wish.types';
+import { WishStatus } from '../wish.types';
 
 export class QueryWishDto {
-  // Les query params arrivent en string — @Type convertit en number
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -32,16 +31,12 @@ export class QueryWishDto {
   category?: string;
 
   @IsOptional()
-  @IsEnum(DonationType)
-  donation_type?: DonationType;
-
-  @IsOptional()
   @IsEnum(WishStatus)
   status?: WishStatus;
 
   @IsOptional()
-  @IsIn(['date', 'amount', 'popularity'])
-  sort?: 'date' | 'amount' | 'popularity';
+  @IsIn(['date', 'popularity'])
+  sort?: 'date' | 'popularity';
 
   @IsOptional()
   @IsIn(['asc', 'desc'])

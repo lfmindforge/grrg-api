@@ -7,7 +7,7 @@ import { SupabaseStorageService } from '../common/storage/supabase-storage.servi
 import { CreateWishDto } from './dto/create-wish.dto';
 import { QueryWishDto } from './dto/query-wish.dto';
 import { PaginatedWishesDto, WishPublicDto } from './dto/wish-response.dto';
-import { DonationType, WishStatus } from './wish.types';
+import { WishStatus } from './wish.types';
 import {
   ForbiddenException,
   InternalServerErrorException,
@@ -132,17 +132,6 @@ describe('WishService', () => {
       );
     });
 
-    it('filtre par donation_type', async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
-      await service.findPublic({ donation_type: DonationType.DELIVERY });
-
-      expect(mockQb.andWhere).toHaveBeenCalledWith(
-        'wish.donation_type = :donationType',
-        { donationType: DonationType.DELIVERY },
-      );
-    });
-
     it('recherche par mot-clé (ILIKE sur title et description)', async () => {
       mockQb.getManyAndCount.mockResolvedValue([[], 0]);
 
@@ -238,7 +227,6 @@ describe('WishService', () => {
       title: 'Mon souhait',
       description: 'Un beau souhait',
       category: 'Électronique',
-      donation_type: DonationType.FINANCIAL,
     };
 
     const mockFile = {
@@ -266,7 +254,6 @@ describe('WishService', () => {
           user_id: 'user-id',
           media_urls: [],
           status: WishStatus.PENDING,
-          amount: null,
           is_private: false,
         }),
       );
@@ -314,15 +301,14 @@ describe('WishService', () => {
       expect(wishRepo.save).not.toHaveBeenCalled();
     });
 
-    it('avec amount et is_private : les valeurs sont transmises à la DB', async () => {
-      const dtoWithAmount: CreateWishDto = {
+    it('avec is_private : la valeur est transmise à la DB', async () => {
+      const dtoWithPrivate: CreateWishDto = {
         ...dto,
-        amount: 50,
         is_private: true,
       };
       const savedWish = {
         id: 'uuid-2',
-        ...dtoWithAmount,
+        ...dtoWithPrivate,
         user_id: 'user-id',
         media_urls: [],
         status: WishStatus.PENDING,
@@ -330,10 +316,10 @@ describe('WishService', () => {
       wishRepo.create.mockReturnValue(savedWish);
       wishRepo.save.mockResolvedValue(savedWish);
 
-      await service.create('user-id', dtoWithAmount, []);
+      await service.create('user-id', dtoWithPrivate, []);
 
       expect(wishRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 50, is_private: true }),
+        expect.objectContaining({ is_private: true }),
       );
     });
   });

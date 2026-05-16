@@ -3,6 +3,7 @@ import {
   EvaluationBonus,
   EvaluationSatisfaction,
 } from '../donation/donation.types';
+import { DonationType } from '../wish/wish.types';
 
 export type GradeProgression = {
   currentGrade: string;
@@ -26,6 +27,7 @@ export class GlowService {
     satisfaction: EvaluationSatisfaction,
     bonus: EvaluationBonus,
     isAnonymous: boolean,
+    donationType: DonationType,
   ): number {
     const satPoints: Record<EvaluationSatisfaction, number> = {
       [EvaluationSatisfaction.NEUTRAL]: 10,
@@ -37,8 +39,16 @@ export class GlowService {
       [EvaluationBonus.ON_TIME]: 10,
       [EvaluationBonus.WENT_ABOVE_AND_BEYOND]: 10,
     };
+    const typePoints: Record<DonationType, number> = {
+      [DonationType.IN_PERSON]: 35,
+      [DonationType.DELIVERY]: 20,
+      [DonationType.FINANCIAL]: 10,
+    };
     return (
-      satPoints[satisfaction] + bonusPoints[bonus] + (isAnonymous ? 40 : 0)
+      satPoints[satisfaction] +
+      bonusPoints[bonus] +
+      (isAnonymous ? 40 : 0) +
+      typePoints[donationType]
     );
   }
 
