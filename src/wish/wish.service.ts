@@ -117,15 +117,42 @@ export class WishService {
     return { data: data as unknown as WishPublicDto[], total, page, limit };
   }
 
-  async update(id: string, userId: string, dto: UpdateWishDto): Promise<Wish> {
+  async update(
+    id: string,
+    userId: string,
+    dto: UpdateWishDto,
+    file?: Express.Multer.File,
+  ): Promise<Wish> {
     const wish = await this.findOwnedWishOrThrow(id, userId);
     Object.assign(wish, dto);
+
+    if (file && wish.status === WishStatus.PENDING) {
+      const bucket = this.config.getOrThrow<string>('SUPABASE_BUCKET_WISHES');
+      if (wish.media_urls?.length) {
+        const paths = wish.media_urls
+          .map((url) => this.supabaseStorage.extractPath(bucket, url))
+          .filter((p): p is string => p !== null);
+        if (paths.length) await this.supabaseStorage.delete(bucket, paths);
+      }
+      const ext = file.originalname.split('.').pop() ?? 'bin';
+      const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const url = await this.supabaseStorage.upload(bucket, path, file);
+      wish.media_urls = [url];
+    }
+
     return this.wishRepo.save(wish);
   }
 
   async softDelete(id: string, userId: string): Promise<void> {
     const wish = await this.findOwnedWishOrThrow(id, userId);
     if (wish.status === WishStatus.CANCELLED) return;
+    if (wish.media_urls?.length) {
+      const bucket = this.config.getOrThrow<string>('SUPABASE_BUCKET_WISHES');
+      const paths = wish.media_urls
+        .map((url) => this.supabaseStorage.extractPath(bucket, url))
+        .filter((p): p is string => p !== null);
+      if (paths.length) await this.supabaseStorage.delete(bucket, paths);
+    }
     wish.status = WishStatus.CANCELLED;
     await this.wishRepo.save(wish);
   }

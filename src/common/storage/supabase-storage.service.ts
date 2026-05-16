@@ -31,4 +31,17 @@ export class SupabaseStorageService {
     const { data } = this.supabase.storage.from(bucket).getPublicUrl(path);
     return data.publicUrl;
   }
+
+  extractPath(bucket: string, url: string): string | null {
+    const marker = `/object/public/${bucket}/`;
+    const idx = url.indexOf(marker);
+    return idx >= 0 ? url.slice(idx + marker.length) : null;
+  }
+
+  async delete(bucket: string, paths: string[]): Promise<void> {
+    const { error } = await this.supabase.storage.from(bucket).remove(paths);
+    if (error) {
+      console.warn(`Supabase cleanup [${bucket}]: ${error.message}`);
+    }
+  }
 }

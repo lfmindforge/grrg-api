@@ -4,6 +4,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { User } from './user.entity';
 import { Wish } from '../wish/wish.entity';
+import { Donation } from '../donation/donation.entity';
 import { UserService } from './user.service';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { WishStatus } from '../wish/wish.types';
@@ -18,7 +19,15 @@ const mockWishRepo = {
   find: jest.fn(),
 };
 
-const mockStorage = { upload: jest.fn() };
+const mockDonationRepo = {
+  count: jest.fn(),
+};
+
+const mockStorage = {
+  upload: jest.fn(),
+  delete: jest.fn().mockResolvedValue(undefined),
+  extractPath: jest.fn().mockReturnValue('user-id/old-avatar.jpg'),
+};
 
 describe('UserService', () => {
   let service: UserService;
@@ -29,6 +38,7 @@ describe('UserService', () => {
         UserService,
         { provide: getRepositoryToken(User), useValue: mockUserRepo },
         { provide: getRepositoryToken(Wish), useValue: mockWishRepo },
+        { provide: getRepositoryToken(Donation), useValue: mockDonationRepo },
         { provide: SupabaseStorageService, useValue: mockStorage },
         { provide: ConfigService, useValue: { getOrThrow: () => 'avatars' } },
       ],
@@ -132,9 +142,10 @@ describe('UserService', () => {
       glow_points: 0,
     };
 
-    it('retourne le profil complet avec badges:[] et donations_count:0', async () => {
+    it('retourne le profil complet avec badges:[] et donations_count réel', async () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
       mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
 
       const result = await service.getProfile('user-id');
 
@@ -150,6 +161,16 @@ describe('UserService', () => {
       });
     });
 
+    it('donations_count reflète le nombre réel de dons complétés', async () => {
+      mockUserRepo.findOne.mockResolvedValue(mockUser);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(5);
+
+      const result = await service.getProfile('user-id');
+
+      expect(result.donations_count).toBe(5);
+    });
+
     it('lève NotFoundException si user introuvable', async () => {
       mockUserRepo.findOne.mockResolvedValue(null);
 
@@ -161,6 +182,7 @@ describe('UserService', () => {
     it('la galerie exclut les souhaits privés', async () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
       mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
 
       await service.getProfile('user-id');
 
@@ -174,6 +196,7 @@ describe('UserService', () => {
     it('la galerie filtre par user_id', async () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
       mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
 
       await service.getProfile('user-id');
 
@@ -186,6 +209,7 @@ describe('UserService', () => {
 
     it('cover = media_urls[0] si présent, null sinon', async () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
+      mockDonationRepo.count.mockResolvedValue(0);
       mockWishRepo.find.mockResolvedValue([
         {
           id: 'wish-1',
@@ -245,6 +269,7 @@ describe('UserService', () => {
         pseudo: 'nouveau',
       });
       mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
 
       const result = await service.updateMe('user-id', { pseudo: 'nouveau' });
 
@@ -271,6 +296,7 @@ describe('UserService', () => {
         .mockResolvedValueOnce(existingUser);
       mockUserRepo.save.mockResolvedValue(existingUser);
       mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
 
       await expect(
         service.updateMe('user-id', { pseudo: 'alice' }),
@@ -294,6 +320,7 @@ describe('UserService', () => {
         avatar_url: avatarUrl,
       });
       mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
 
       const result = await service.updateMe('user-id', {}, file);
 
@@ -308,12 +335,39 @@ describe('UserService', () => {
       expect(result.avatar_url).toBe(avatarUrl);
     });
 
+    it("supprime l'ancien avatar avant d'uploader le nouveau", async () => {
+      const userWithAvatar = {
+        ...existingUser,
+        avatar_url: 'https://cdn.supabase.co/storage/v1/object/public/avatars/user-id/old-avatar.jpg',
+      };
+      const file = {
+        buffer: Buffer.from('img'),
+        mimetype: 'image/jpeg',
+        originalname: 'new.jpg',
+      } as Express.Multer.File;
+      const newUrl = 'https://cdn.supabase.co/avatars/user-id/new.jpg';
+      mockStorage.upload.mockResolvedValue(newUrl);
+      mockStorage.extractPath.mockReturnValue('user-id/old-avatar.jpg');
+      mockUserRepo.findOne
+        .mockResolvedValueOnce(userWithAvatar)
+        .mockResolvedValueOnce({ ...userWithAvatar, avatar_url: newUrl });
+      mockUserRepo.save.mockResolvedValue({ ...userWithAvatar, avatar_url: newUrl });
+      mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
+
+      await service.updateMe('user-id', {}, file);
+
+      expect(mockStorage.delete).toHaveBeenCalledWith('avatars', ['user-id/old-avatar.jpg']);
+      expect(mockStorage.upload).toHaveBeenCalled();
+    });
+
     it('sans pseudo ni fichier → sauvegarde et retourne profil inchangé', async () => {
       mockUserRepo.findOne
         .mockResolvedValueOnce(existingUser)
         .mockResolvedValueOnce(existingUser);
       mockUserRepo.save.mockResolvedValue(existingUser);
       mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
 
       const result = await service.updateMe('user-id', {});
 

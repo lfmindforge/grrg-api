@@ -12,10 +12,11 @@ import {
   Put,
   Query,
   Req,
+  UploadedFile,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Request } from 'express';
 import { WishService } from './wish.service';
@@ -56,12 +57,32 @@ export class WishController {
   }
 
   @Put(':id')
+  @UseInterceptors(
+    FileInterceptor('media', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        const allowed = ['image/jpeg', 'image/png', 'video/mp4'];
+        if (allowed.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(
+            new BadRequestException(
+              'Type de fichier non autorisé : jpg, png, mp4 uniquement',
+            ),
+            false,
+          );
+        }
+      },
+    }),
+  )
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: Request & { user: { id: string } },
     @Body() dto: UpdateWishDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.wishService.update(id, req.user.id, dto);
+    return this.wishService.update(id, req.user.id, dto, file);
   }
 
   @Delete(':id')

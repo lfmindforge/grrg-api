@@ -24,7 +24,7 @@ import KeyvRedis from '@keyv/redis';
         url: config.get<string>('DATABASE_URL'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
-        migrationsRun: false,
+        migrationsRun: true,
         synchronize: false,
       }),
       inject: [ConfigService],

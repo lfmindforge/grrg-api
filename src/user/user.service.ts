@@ -8,12 +8,14 @@ import { Not, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { User } from './user.entity';
 import { Wish } from '../wish/wish.entity';
+import { Donation } from '../donation/donation.entity';
 import {
   CreateUserData,
   UserPublicProfileDto,
   WishPreviewDto,
 } from './user.types';
 import { WishStatus } from '../wish/wish.types';
+import { DonationStatus } from '../donation/donation.types';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 
@@ -22,6 +24,7 @@ export class UserService {
   constructor(
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     @InjectRepository(Wish) private readonly wishRepo: Repository<Wish>,
+    @InjectRepository(Donation) private readonly donationRepo: Repository<Donation>,
     private readonly supabaseStorage: SupabaseStorageService,
     private readonly config: ConfigService,
   ) {}
@@ -65,6 +68,10 @@ export class UserService {
       status: w.status,
     }));
 
+    const donations_count = await this.donationRepo.count({
+      where: { donor_id: id, status: DonationStatus.COMPLETED },
+    });
+
     return {
       id: user.id,
       pseudo: user.pseudo,
@@ -72,7 +79,7 @@ export class UserService {
       grade: user.grade,
       glow_points: user.glow_points,
       badges: [],
-      donations_count: 0,
+      donations_count,
       gallery,
     };
   }
@@ -93,6 +100,10 @@ export class UserService {
 
     if (file) {
       const bucket = this.config.getOrThrow<string>('SUPABASE_BUCKET_AVATARS');
+      if (user!.avatar_url) {
+        const oldPath = this.supabaseStorage.extractPath(bucket, user!.avatar_url);
+        if (oldPath) await this.supabaseStorage.delete(bucket, [oldPath]);
+      }
       const ext = file.originalname.split('.').pop() ?? 'bin';
       const path = `${userId}/${Date.now()}.${ext}`;
       user!.avatar_url = await this.supabaseStorage.upload(bucket, path, file);
