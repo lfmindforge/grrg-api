@@ -1,14 +1,5 @@
-import {
-  IsBoolean,
-  IsEnum,
-  IsNotEmpty,
-  IsNumber,
-  IsOptional,
-  IsPositive,
-  MaxLength,
-} from 'class-validator';
-import { Transform, Type } from 'class-transformer';
-import { DonationType } from '../wish.types';
+import { IsBoolean, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class CreateWishDto {
   @IsNotEmpty()
@@ -21,16 +12,6 @@ export class CreateWishDto {
   @IsNotEmpty()
   @MaxLength(50)
   category!: string;
-
-  @IsEnum(DonationType)
-  donation_type!: DonationType;
-
-  // Multipart envoie tout en string — @Type convertit en number
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @IsPositive()
-  amount?: number;
 
   // Multipart envoie "true"/"false" en string — @Transform normalise en boolean
   @IsOptional()

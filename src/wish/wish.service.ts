@@ -46,12 +46,6 @@ export class WishService {
       });
     }
 
-    if (query.donation_type) {
-      qb.andWhere('wish.donation_type = :donationType', {
-        donationType: query.donation_type,
-      });
-    }
-
     if (query.search) {
       qb.andWhere(
         '(wish.title ILIKE :search OR wish.description ILIKE :search)',
@@ -97,12 +91,7 @@ export class WishService {
   }
 
   private resolveSortField(sort: string): string {
-    switch (sort) {
-      case 'amount':
-        return 'wish.amount';
-      default:
-        return 'wish.created_at';
-    }
+    return 'wish.created_at';
   }
 
   async findMine(
@@ -183,8 +172,6 @@ export class WishService {
       title: dto.title,
       description: dto.description,
       category: dto.category,
-      donation_type: dto.donation_type,
-      amount: dto.amount ?? null,
       is_private: dto.is_private ?? false,
       media_urls: mediaUrls,
       status: WishStatus.PENDING,
