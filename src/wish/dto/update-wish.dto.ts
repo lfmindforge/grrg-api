@@ -1,14 +1,4 @@
-import {
-  IsBoolean,
-  IsEnum,
-  IsNumber,
-  IsOptional,
-  IsString,
-  MaxLength,
-  Min,
-  ValidateIf,
-} from 'class-validator';
-import { DonationType } from '../wish.types';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpdateWishDto {
   @IsOptional()
@@ -24,17 +14,6 @@ export class UpdateWishDto {
   @IsString()
   @MaxLength(50)
   category?: string;
-
-  @IsOptional()
-  @IsEnum(DonationType)
-  donation_type?: DonationType;
-
-  // ValidateIf ignore la validation si null (null = retirer le montant)
-  @IsOptional()
-  @ValidateIf((o) => o.amount !== null)
-  @IsNumber()
-  @Min(0)
-  amount?: number | null;
 
   @IsOptional()
   @IsBoolean()
