@@ -47,6 +47,9 @@ export class DonationService {
     });
 
     const saved = await this.donationRepo.save(donation);
+    wish.status = WishStatus.IN_PROGRESS;
+    await this.wishRepo.save(wish);
+
     // TODO US-020 — NotificationService.notify(wish.user_id, { type: 'donation_proposed', donation_id: saved.id })
     return saved;
   }
