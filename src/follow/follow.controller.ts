@@ -5,6 +5,20 @@ import { FollowService } from './follow.service';
 export class FollowController {
   constructor(private readonly followService: FollowService) {}
 
+  @Get(':id/followers')
+  getFollowers(
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.followService.getFollowers(id);
+  }
+
+  @Get(':id/following')
+  getFollowing(
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.followService.getFollowing(id);
+  }
+
   @Get(':id')
   async checkFollow(
     @Req() req: { user: { id: string } },

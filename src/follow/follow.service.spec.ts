@@ -103,6 +103,46 @@ describe('FollowService', () => {
     });
   });
 
+  describe('getFollowers()', () => {
+    it('retourne la liste des followers', async () => {
+      const followers = [
+        { id: 'user-2', pseudo: 'alice', avatar_url: null, grade: 'lumiere', glow_points: 20 },
+      ];
+      mockDataSource.query.mockResolvedValue(followers);
+
+      const result = await service.getFollowers('user-1');
+
+      expect(result).toEqual(followers);
+      expect(mockDataSource.query).toHaveBeenCalledWith(expect.any(String), ['user-1']);
+    });
+
+    it('retourne un tableau vide si aucun follower', async () => {
+      mockDataSource.query.mockResolvedValue([]);
+      const result = await service.getFollowers('user-1');
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getFollowing()', () => {
+    it('retourne la liste des utilisateurs suivis', async () => {
+      const following = [
+        { id: 'user-3', pseudo: 'bob', avatar_url: null, grade: 'eclat', glow_points: 50 },
+      ];
+      mockDataSource.query.mockResolvedValue(following);
+
+      const result = await service.getFollowing('user-1');
+
+      expect(result).toEqual(following);
+      expect(mockDataSource.query).toHaveBeenCalledWith(expect.any(String), ['user-1']);
+    });
+
+    it('retourne un tableau vide si aucun suivi', async () => {
+      mockDataSource.query.mockResolvedValue([]);
+      const result = await service.getFollowing('user-1');
+      expect(result).toEqual([]);
+    });
+  });
+
   describe('isFollowing()', () => {
     it('retourne true si la relation de suivi existe', async () => {
       mockFollowRepo.findOne.mockResolvedValue({ follower_id: 'user-1', followed_id: 'user-2' });
