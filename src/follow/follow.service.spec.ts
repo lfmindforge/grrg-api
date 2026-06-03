@@ -1,9 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getRepositoryToken, getDataSourceToken } from '@nestjs/typeorm';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Follow } from './follow.entity';
 import { User } from '../user/user.entity';
 import { FollowService } from './follow.service';
+
+const mockDataSource = {
+  query: jest.fn(),
+};
 
 const mockFollowRepo = {
   findOne: jest.fn(),
@@ -26,6 +30,7 @@ describe('FollowService', () => {
         FollowService,
         { provide: getRepositoryToken(Follow), useValue: mockFollowRepo },
         { provide: getRepositoryToken(User), useValue: mockUserRepo },
+        { provide: getDataSourceToken(), useValue: mockDataSource },
       ],
     }).compile();
 
@@ -95,6 +100,27 @@ describe('FollowService', () => {
       const result = await service.countFollowing('user-id');
       expect(result).toBe(3);
       expect(mockFollowRepo.count).toHaveBeenCalledWith({ where: { follower_id: 'user-id' } });
+    });
+  });
+
+  describe('getSuggestions()', () => {
+    it('retourne des utilisateurs à suivre', async () => {
+      const suggestions = [
+        { id: 'user-2', pseudo: 'bob', avatar_url: null, grade: 'lumiere', glow_points: 50 },
+      ];
+      mockDataSource.query.mockResolvedValue(suggestions);
+
+      const result = await service.getSuggestions('user-1');
+
+      expect(result).toEqual(suggestions);
+    });
+
+    it('passe le userId en paramètre de la requête', async () => {
+      mockDataSource.query.mockResolvedValue([]);
+
+      await service.getSuggestions('user-1');
+
+      expect(mockDataSource.query).toHaveBeenCalledWith(expect.any(String), ['user-1']);
     });
   });
 });

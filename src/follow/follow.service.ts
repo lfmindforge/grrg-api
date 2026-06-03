@@ -1,8 +1,10 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Follow } from './follow.entity';
 import { User } from '../user/user.entity';
+import { SuggestionDto } from './follow.types';
 
 @Injectable()
 export class FollowService {
@@ -11,6 +13,7 @@ export class FollowService {
     private readonly followRepo: Repository<Follow>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async follow(followerId: string, followedId: string): Promise<void> {
@@ -43,5 +46,20 @@ export class FollowService {
 
   countFollowing(userId: string): Promise<number> {
     return this.followRepo.count({ where: { follower_id: userId } });
+  }
+
+  async getSuggestions(userId: string): Promise<SuggestionDto[]> {
+    return this.dataSource.query<SuggestionDto[]>(
+      `SELECT u.id, u.pseudo, u.avatar_url, u.grade, u.glow_points
+       FROM users u
+       WHERE u.id != $1
+         AND u.id NOT IN (
+           SELECT followed_id FROM follows WHERE follower_id = $1
+         )
+         AND u.glow_points > 0
+       ORDER BY u.glow_points DESC
+       LIMIT 10`,
+      [userId],
+    );
   }
 }
