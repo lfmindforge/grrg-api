@@ -96,13 +96,14 @@ export class EvaluationService {
     const donor = await this.userRepo.findOne({
       where: { id: donation.donor_id },
     });
+    if (!donor) throw new NotFoundException('Donateur introuvable');
     const count = await this.evaluationRepo.count({
       where: { donation: { donor_id: donation.donor_id } },
       relations: { donation: true },
     });
 
     // Capturer le grade avant mise à jour pour détecter une montée de grade
-    const previousGrade = donor!.grade;
+    const previousGrade = donor.grade;
     const newGrade = this.glowService.computeGrade(count);
     donor!.glow_points += glow_awarded;
     donor!.grade = newGrade;
