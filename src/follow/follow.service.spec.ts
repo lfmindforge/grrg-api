@@ -1,0 +1,100 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { Follow } from './follow.entity';
+import { User } from '../user/user.entity';
+import { FollowService } from './follow.service';
+
+const mockFollowRepo = {
+  findOne: jest.fn(),
+  create: jest.fn(),
+  save: jest.fn(),
+  remove: jest.fn(),
+  count: jest.fn(),
+};
+
+const mockUserRepo = {
+  findOne: jest.fn(),
+};
+
+describe('FollowService', () => {
+  let service: FollowService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        FollowService,
+        { provide: getRepositoryToken(Follow), useValue: mockFollowRepo },
+        { provide: getRepositoryToken(User), useValue: mockUserRepo },
+      ],
+    }).compile();
+
+    service = module.get<FollowService>(FollowService);
+    jest.clearAllMocks();
+  });
+
+  describe('follow()', () => {
+    it('suit un utilisateur', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ id: 'followed-id' });
+      mockFollowRepo.findOne.mockResolvedValue(null);
+      mockFollowRepo.create.mockReturnValue({ follower_id: 'follower-id', followed_id: 'followed-id' });
+      mockFollowRepo.save.mockResolvedValue(undefined);
+
+      await service.follow('follower-id', 'followed-id');
+
+      expect(mockFollowRepo.save).toHaveBeenCalled();
+    });
+
+    it('lève BadRequestException si on tente de se suivre soi-même', async () => {
+      await expect(service.follow('user-id', 'user-id')).rejects.toThrow(BadRequestException);
+      expect(mockFollowRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("lève NotFoundException si l'utilisateur cible n'existe pas", async () => {
+      mockUserRepo.findOne.mockResolvedValue(null);
+      await expect(service.follow('follower-id', 'unknown-id')).rejects.toThrow(NotFoundException);
+    });
+
+    it('lève ConflictException si déjà suivi', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ id: 'followed-id' });
+      mockFollowRepo.findOne.mockResolvedValue({ follower_id: 'follower-id', followed_id: 'followed-id' });
+      await expect(service.follow('follower-id', 'followed-id')).rejects.toThrow(ConflictException);
+      expect(mockFollowRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('unfollow()', () => {
+    it('cesse de suivre un utilisateur', async () => {
+      const follow = { follower_id: 'follower-id', followed_id: 'followed-id' };
+      mockFollowRepo.findOne.mockResolvedValue(follow);
+      mockFollowRepo.remove.mockResolvedValue(undefined);
+
+      await service.unfollow('follower-id', 'followed-id');
+
+      expect(mockFollowRepo.remove).toHaveBeenCalledWith(follow);
+    });
+
+    it('lève NotFoundException si relation de suivi inexistante', async () => {
+      mockFollowRepo.findOne.mockResolvedValue(null);
+      await expect(service.unfollow('follower-id', 'followed-id')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('countFollowers()', () => {
+    it('retourne le nombre de followers', async () => {
+      mockFollowRepo.count.mockResolvedValue(7);
+      const result = await service.countFollowers('user-id');
+      expect(result).toBe(7);
+      expect(mockFollowRepo.count).toHaveBeenCalledWith({ where: { followed_id: 'user-id' } });
+    });
+  });
+
+  describe('countFollowing()', () => {
+    it('retourne le nombre de following', async () => {
+      mockFollowRepo.count.mockResolvedValue(3);
+      const result = await service.countFollowing('user-id');
+      expect(result).toBe(3);
+      expect(mockFollowRepo.count).toHaveBeenCalledWith({ where: { follower_id: 'user-id' } });
+    });
+  });
+});
