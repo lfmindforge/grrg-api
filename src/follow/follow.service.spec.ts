@@ -103,6 +103,20 @@ describe('FollowService', () => {
     });
   });
 
+  describe('isFollowing()', () => {
+    it('retourne true si la relation de suivi existe', async () => {
+      mockFollowRepo.findOne.mockResolvedValue({ follower_id: 'user-1', followed_id: 'user-2' });
+      const result = await service.isFollowing('user-1', 'user-2');
+      expect(result).toBe(true);
+    });
+
+    it('retourne false si la relation est absente', async () => {
+      mockFollowRepo.findOne.mockResolvedValue(null);
+      const result = await service.isFollowing('user-1', 'user-2');
+      expect(result).toBe(false);
+    });
+  });
+
   describe('getSuggestions()', () => {
     it('retourne des utilisateurs à suivre', async () => {
       const suggestions = [

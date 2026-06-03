@@ -48,6 +48,13 @@ export class FollowService {
     return this.followRepo.count({ where: { follower_id: userId } });
   }
 
+  async isFollowing(followerId: string, targetId: string): Promise<boolean> {
+    const record = await this.followRepo.findOne({
+      where: { follower_id: followerId, followed_id: targetId },
+    });
+    return !!record;
+  }
+
   async getSuggestions(userId: string): Promise<SuggestionDto[]> {
     return this.dataSource.query<SuggestionDto[]>(
       `SELECT u.id, u.pseudo, u.avatar_url, u.grade, u.glow_points

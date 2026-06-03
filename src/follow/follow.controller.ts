@@ -1,9 +1,18 @@
-import { Controller, Delete, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
 import { FollowService } from './follow.service';
 
 @Controller('follows')
 export class FollowController {
   constructor(private readonly followService: FollowService) {}
+
+  @Get(':id')
+  async checkFollow(
+    @Req() req: { user: { id: string } },
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ is_following: boolean }> {
+    const is_following = await this.followService.isFollowing(req.user.id, id);
+    return { is_following };
+  }
 
   @Post(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
