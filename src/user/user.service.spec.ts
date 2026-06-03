@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { User } from './user.entity';
 import { Wish } from '../wish/wish.entity';
 import { Donation } from '../donation/donation.entity';
+import { Follow } from '../follow/follow.entity';
 import { UserService } from './user.service';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { WishStatus } from '../wish/wish.types';
@@ -20,6 +21,10 @@ const mockWishRepo = {
 };
 
 const mockDonationRepo = {
+  count: jest.fn(),
+};
+
+const mockFollowRepo = {
   count: jest.fn(),
 };
 
@@ -39,6 +44,7 @@ describe('UserService', () => {
         { provide: getRepositoryToken(User), useValue: mockUserRepo },
         { provide: getRepositoryToken(Wish), useValue: mockWishRepo },
         { provide: getRepositoryToken(Donation), useValue: mockDonationRepo },
+        { provide: getRepositoryToken(Follow), useValue: mockFollowRepo },
         { provide: SupabaseStorageService, useValue: mockStorage },
         { provide: ConfigService, useValue: { getOrThrow: () => 'avatars' } },
       ],
@@ -146,6 +152,7 @@ describe('UserService', () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       const result = await service.getProfile('user-id');
 
@@ -157,6 +164,8 @@ describe('UserService', () => {
         glow_points: 0,
         badges: [],
         donations_count: 0,
+        followers_count: 0,
+        following_count: 0,
         gallery: [],
       });
     });
@@ -165,6 +174,7 @@ describe('UserService', () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(5);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       const result = await service.getProfile('user-id');
 
@@ -183,6 +193,7 @@ describe('UserService', () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       await service.getProfile('user-id');
 
@@ -197,6 +208,7 @@ describe('UserService', () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       await service.getProfile('user-id');
 
@@ -210,6 +222,7 @@ describe('UserService', () => {
     it('cover = media_urls[0] si présent, null sinon', async () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
       mockWishRepo.find.mockResolvedValue([
         {
           id: 'wish-1',
@@ -242,6 +255,44 @@ describe('UserService', () => {
         },
       ]);
     });
+
+    it('retourne followers_count et following_count', async () => {
+      mockUserRepo.findOne.mockResolvedValue(mockUser);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count
+        .mockResolvedValueOnce(4) // followers
+        .mockResolvedValueOnce(2); // following
+
+      const result = await service.getProfile('user-id');
+
+      expect(result.followers_count).toBe(4);
+      expect(result.following_count).toBe(2);
+    });
+
+    it('followers_count est 0 si aucun follower', async () => {
+      mockUserRepo.findOne.mockResolvedValue(mockUser);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
+
+      const result = await service.getProfile('user-id');
+
+      expect(result.followers_count).toBe(0);
+      expect(result.following_count).toBe(0);
+    });
+
+    it('les compteurs sont calculés pour le bon userId', async () => {
+      mockUserRepo.findOne.mockResolvedValue(mockUser);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
+
+      await service.getProfile('user-id');
+
+      expect(mockFollowRepo.count).toHaveBeenCalledWith({ where: { followed_id: 'user-id' } });
+      expect(mockFollowRepo.count).toHaveBeenCalledWith({ where: { follower_id: 'user-id' } });
+    });
   });
 
   // --- updateMe() ---
@@ -270,6 +321,7 @@ describe('UserService', () => {
       });
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       const result = await service.updateMe('user-id', { pseudo: 'nouveau' });
 
@@ -297,6 +349,7 @@ describe('UserService', () => {
       mockUserRepo.save.mockResolvedValue(existingUser);
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       await expect(
         service.updateMe('user-id', { pseudo: 'alice' }),
@@ -321,6 +374,7 @@ describe('UserService', () => {
       });
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       const result = await service.updateMe('user-id', {}, file);
 
@@ -354,6 +408,7 @@ describe('UserService', () => {
       mockUserRepo.save.mockResolvedValue({ ...userWithAvatar, avatar_url: newUrl });
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       await service.updateMe('user-id', {}, file);
 
@@ -368,6 +423,7 @@ describe('UserService', () => {
       mockUserRepo.save.mockResolvedValue(existingUser);
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       const result = await service.updateMe('user-id', {});
 

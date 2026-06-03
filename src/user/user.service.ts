@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { User } from './user.entity';
 import { Wish } from '../wish/wish.entity';
 import { Donation } from '../donation/donation.entity';
+import { Follow } from '../follow/follow.entity';
 import {
   CreateUserData,
   UserPublicProfileDto,
@@ -25,6 +26,7 @@ export class UserService {
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     @InjectRepository(Wish) private readonly wishRepo: Repository<Wish>,
     @InjectRepository(Donation) private readonly donationRepo: Repository<Donation>,
+    @InjectRepository(Follow) private readonly followRepo: Repository<Follow>,
     private readonly supabaseStorage: SupabaseStorageService,
     private readonly config: ConfigService,
   ) {}
@@ -52,14 +54,16 @@ export class UserService {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('Utilisateur introuvable');
 
-    const wishes = await this.wishRepo.find({
-      where: {
-        user_id: id,
-        is_private: false,
-        status: Not(WishStatus.CANCELLED),
-      },
-      order: { created_at: 'DESC' },
-    });
+    const [wishes, donations_count, followers_count, following_count] =
+      await Promise.all([
+        this.wishRepo.find({
+          where: { user_id: id, is_private: false, status: Not(WishStatus.CANCELLED) },
+          order: { created_at: 'DESC' },
+        }),
+        this.donationRepo.count({ where: { donor_id: id, status: DonationStatus.COMPLETED } }),
+        this.followRepo.count({ where: { followed_id: id } }),
+        this.followRepo.count({ where: { follower_id: id } }),
+      ]);
 
     const gallery: WishPreviewDto[] = wishes.map((w) => ({
       id: w.id,
@@ -67,10 +71,6 @@ export class UserService {
       cover: w.media_urls[0] ?? null,
       status: w.status,
     }));
-
-    const donations_count = await this.donationRepo.count({
-      where: { donor_id: id, status: DonationStatus.COMPLETED },
-    });
 
     return {
       id: user.id,
@@ -80,6 +80,8 @@ export class UserService {
       glow_points: user.glow_points,
       badges: [],
       donations_count,
+      followers_count,
+      following_count,
       gallery,
     };
   }

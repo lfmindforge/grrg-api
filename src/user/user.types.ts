@@ -25,5 +25,7 @@ export interface UserPublicProfileDto {
   glow_points: number;
   badges: unknown[]; // placeholder — branché en US-014
   donations_count: number; // placeholder — 0 jusqu'à US-009
+  followers_count: number;
+  following_count: number;
   gallery: WishPreviewDto[];
 }

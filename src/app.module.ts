@@ -12,6 +12,9 @@ import { DonationModule } from './donation/donation.module';
 import { EvaluationModule } from './evaluation/evaluation.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
+import { FollowModule } from './follow/follow.module';
+import { CommentModule } from './comment/comment.module';
+import { ReactionModule } from './reaction/reaction.module';
 import KeyvRedis from '@keyv/redis';
 
 @Module({
@@ -48,6 +51,9 @@ import KeyvRedis from '@keyv/redis';
     EvaluationModule,
     NotificationsModule,
     LeaderboardModule,
+    FollowModule,
+    CommentModule,
+    ReactionModule,
   ],
   //Application throttleGuard sur toutes les routes
   providers: [

@@ -13,12 +13,24 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { Public } from '../common/decorators/public.decorator';
 import { UserService } from './user.service';
+import { FollowService } from '../follow/follow.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserPublicProfileDto } from './user.types';
+import { SuggestionDto } from '../follow/follow.types';
 
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly followService: FollowService,
+  ) {}
+
+  @Get('suggestions')
+  getSuggestions(
+    @Req() req: { user: { id: string } },
+  ): Promise<SuggestionDto[]> {
+    return this.followService.getSuggestions(req.user.id);
+  }
 
   @Get(':id')
   @Public()
