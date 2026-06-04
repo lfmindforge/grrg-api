@@ -79,13 +79,13 @@ export class FeedService {
       FROM (
         SELECT
           'wish_created'::text       AS type,
-          w.id                       AS entity_id,
+          w.id::text                 AS entity_id,
           w.created_at               AS occurred_at,
-          u.id                       AS actor_id,
+          u.id::text                 AS actor_id,
           u.pseudo                   AS actor_pseudo,
           u.avatar_url               AS actor_avatar_url,
           u.grade                    AS actor_grade,
-          w.id                       AS wish_id,
+          w.id::text                 AS wish_id,
           w.title                    AS wish_title,
           w.category                 AS wish_category,
           w.media_urls[1]            AS wish_media_url,
@@ -100,13 +100,13 @@ export class FeedService {
 
         SELECT
           'wish_fulfilled'::text     AS type,
-          w.id                       AS entity_id,
+          w.id::text                 AS entity_id,
           w.updated_at               AS occurred_at,
-          u.id                       AS actor_id,
+          u.id::text                 AS actor_id,
           u.pseudo                   AS actor_pseudo,
           u.avatar_url               AS actor_avatar_url,
           u.grade                    AS actor_grade,
-          w.id                       AS wish_id,
+          w.id::text                 AS wish_id,
           w.title                    AS wish_title,
           w.category                 AS wish_category,
           w.media_urls[1]            AS wish_media_url,
@@ -121,9 +121,9 @@ export class FeedService {
 
         SELECT
           'grade_up'::text           AS type,
-          n.id                       AS entity_id,
+          n.id::text                 AS entity_id,
           n.created_at               AS occurred_at,
-          u.id                       AS actor_id,
+          u.id::text                 AS actor_id,
           u.pseudo                   AS actor_pseudo,
           u.avatar_url               AS actor_avatar_url,
           u.grade                    AS actor_grade,
@@ -168,13 +168,13 @@ export class FeedService {
       FROM (
         SELECT
           'wish_created'::text       AS type,
-          w.id                       AS entity_id,
+          w.id::text                 AS entity_id,
           w.created_at               AS occurred_at,
-          u.id                       AS actor_id,
+          u.id::text                 AS actor_id,
           u.pseudo                   AS actor_pseudo,
           u.avatar_url               AS actor_avatar_url,
           u.grade                    AS actor_grade,
-          w.id                       AS wish_id,
+          w.id::text                 AS wish_id,
           w.title                    AS wish_title,
           w.category                 AS wish_category,
           w.media_urls[1]            AS wish_media_url,
@@ -187,13 +187,13 @@ export class FeedService {
 
         SELECT
           'wish_fulfilled'::text     AS type,
-          w.id                       AS entity_id,
+          w.id::text                 AS entity_id,
           w.updated_at               AS occurred_at,
-          u.id                       AS actor_id,
+          u.id::text                 AS actor_id,
           u.pseudo                   AS actor_pseudo,
           u.avatar_url               AS actor_avatar_url,
           u.grade                    AS actor_grade,
-          w.id                       AS wish_id,
+          w.id::text                 AS wish_id,
           w.title                    AS wish_title,
           w.category                 AS wish_category,
           w.media_urls[1]            AS wish_media_url,
@@ -206,9 +206,9 @@ export class FeedService {
 
         SELECT
           'grade_up'::text           AS type,
-          n.id                       AS entity_id,
+          n.id::text                 AS entity_id,
           n.created_at               AS occurred_at,
-          u.id                       AS actor_id,
+          u.id::text                 AS actor_id,
           u.pseudo                   AS actor_pseudo,
           u.avatar_url               AS actor_avatar_url,
           u.grade                    AS actor_grade,
