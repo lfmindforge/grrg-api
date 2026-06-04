@@ -108,7 +108,7 @@ describe('WishService', () => {
         { isPrivate: false },
       );
       expect(result).toEqual({
-        data: [{ ...wish, comments_count: 0 }],
+        data: [{ ...wish, comments_count: 0, reactions: [] }],
         total: 1,
         page: 1,
         limit: 20,

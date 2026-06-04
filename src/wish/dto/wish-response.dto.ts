@@ -1,5 +1,10 @@
 import { WishStatus } from '../wish.types';
 
+export interface ReactionCountDto {
+  emoji: string;
+  count: number;
+}
+
 export interface UserPublicDto {
   id: string;
   pseudo: string;
@@ -22,6 +27,7 @@ export interface WishPublicDto {
   user: UserPublicDto;
   donated_amount: number;
   comments_count?: number;
+  reactions: ReactionCountDto[];
 }
 
 export interface PaginatedWishesDto {
