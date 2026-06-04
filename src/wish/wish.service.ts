@@ -67,6 +67,19 @@ export class WishService {
       '(SELECT COUNT(c.id)::int FROM comments c WHERE c.wish_id = wish.id)',
       'comments_count',
     );
+    qb.addSelect(
+      `(SELECT COALESCE(
+          json_agg(json_build_object('emoji', emoji, 'count', cnt) ORDER BY cnt DESC),
+          '[]'::json
+        )
+        FROM (
+          SELECT emoji, COUNT(*)::int AS cnt
+          FROM reactions
+          WHERE wish_id = wish.id
+          GROUP BY emoji
+        ) _r)`,
+      'reactions',
+    );
 
     // getCount() exécute un SELECT COUNT(*) indépendant (ignore skip/take et addSelect)
     const total = await qb.getCount();
@@ -76,6 +89,7 @@ export class WishService {
     const data = entities.map((entity, i) => ({
       ...entity,
       comments_count: parseInt(raw[i]?.comments_count ?? '0', 10),
+      reactions: raw[i]?.reactions ?? [],
     }));
 
     return { data: data as unknown as WishPublicDto[], total, page, limit };
@@ -93,6 +107,19 @@ export class WishService {
         '(SELECT COUNT(c.id)::int FROM comments c WHERE c.wish_id = wish.id)',
         'comments_count',
       )
+      .addSelect(
+        `(SELECT COALESCE(
+            json_agg(json_build_object('emoji', emoji, 'count', cnt) ORDER BY cnt DESC),
+            '[]'::json
+          )
+          FROM (
+            SELECT emoji, COUNT(*)::int AS cnt
+            FROM reactions
+            WHERE wish_id = wish.id
+            GROUP BY emoji
+          ) _r)`,
+        'reactions',
+      )
       .where('wish.id = :id AND wish.is_private = :isPrivate', {
         id,
         isPrivate: false,
@@ -105,7 +132,8 @@ export class WishService {
 
     const donated_amount = parseFloat(raw[0]?.donated_amount ?? '0');
     const comments_count = parseInt(raw[0]?.comments_count ?? '0', 10);
-    return { ...entities[0], donated_amount, comments_count } as unknown as WishPublicDto;
+    const reactions = raw[0]?.reactions ?? [];
+    return { ...entities[0], donated_amount, comments_count, reactions } as unknown as WishPublicDto;
   }
 
   private resolveSortField(sort: string): string {
