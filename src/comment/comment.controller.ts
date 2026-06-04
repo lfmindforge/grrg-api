@@ -12,7 +12,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { CommentService } from './comment.service';
-import { Public } from '../auth/decorators/public.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { QueryCommentsDto } from './dto/query-comments.dto';
 
