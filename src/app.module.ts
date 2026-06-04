@@ -15,6 +15,7 @@ import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { FollowModule } from './follow/follow.module';
 import { CommentModule } from './comment/comment.module';
 import { ReactionModule } from './reaction/reaction.module';
+import { FeedModule } from './feed/feed.module';
 import KeyvRedis from '@keyv/redis';
 
 @Module({
@@ -52,6 +53,7 @@ import KeyvRedis from '@keyv/redis';
     NotificationsModule,
     LeaderboardModule,
     FollowModule,
+    FeedModule,
     CommentModule,
     ReactionModule,
   ],
