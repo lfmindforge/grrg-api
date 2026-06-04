@@ -33,6 +33,7 @@ describe('WishService', () => {
     distinct: jest.Mock;
     addSelect: jest.Mock;
     getManyAndCount: jest.Mock;
+    getCount: jest.Mock;
     getOne: jest.Mock;
     getRawMany: jest.Mock;
     getRawAndEntities: jest.Mock;
@@ -51,6 +52,7 @@ describe('WishService', () => {
       distinct: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
       getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+      getCount: jest.fn().mockResolvedValue(0),
       getOne: jest.fn().mockResolvedValue(null),
       getRawMany: jest.fn().mockResolvedValue([]),
       getRawAndEntities: jest.fn().mockResolvedValue({ entities: [], raw: [] }),
@@ -88,7 +90,11 @@ describe('WishService', () => {
   describe('findPublic()', () => {
     it('retourne une réponse paginée avec les valeurs par défaut (page=1, limit=20)', async () => {
       const wish = { id: 'uuid-1', title: 'Test', is_private: false };
-      mockQb.getManyAndCount.mockResolvedValue([[wish], 1]);
+      mockQb.getCount.mockResolvedValue(1);
+      mockQb.getRawAndEntities.mockResolvedValue({
+        entities: [wish],
+        raw: [{ comments_count: '0' }],
+      });
 
       const result: PaginatedWishesDto = await service.findPublic({});
 
@@ -101,12 +107,15 @@ describe('WishService', () => {
         'wish.is_private = :isPrivate',
         { isPrivate: false },
       );
-      expect(result).toEqual({ data: [wish], total: 1, page: 1, limit: 20 });
+      expect(result).toEqual({
+        data: [{ ...wish, comments_count: 0 }],
+        total: 1,
+        page: 1,
+        limit: 20,
+      });
     });
 
     it("exclut les souhaits 'cancelled' par défaut (aucun filtre status)", async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
       await service.findPublic({});
 
       expect(mockQb.andWhere).toHaveBeenCalledWith(
@@ -116,8 +125,6 @@ describe('WishService', () => {
     });
 
     it("inclut 'cancelled' si status=cancelled est fourni explicitement", async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
       await service.findPublic({ status: WishStatus.CANCELLED });
 
       expect(mockQb.andWhere).toHaveBeenCalledWith('wish.status = :status', {
@@ -126,8 +133,6 @@ describe('WishService', () => {
     });
 
     it('filtre par category (insensible à la casse)', async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
       await service.findPublic({ category: 'Électronique' });
 
       expect(mockQb.andWhere).toHaveBeenCalledWith(
@@ -137,8 +142,6 @@ describe('WishService', () => {
     });
 
     it('recherche par mot-clé (ILIKE sur title et description)', async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
       await service.findPublic({ search: 'vélo' });
 
       expect(mockQb.andWhere).toHaveBeenCalledWith(
@@ -148,8 +151,6 @@ describe('WishService', () => {
     });
 
     it('trie par popularité via COUNT des donations sur le souhait', async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
       await service.findPublic({ sort: 'popularity' });
 
       expect(mockQb.addSelect).toHaveBeenCalledWith(
@@ -160,8 +161,6 @@ describe('WishService', () => {
     });
 
     it('applique la pagination : page=2, limit=10 → skip=10, take=10', async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
       const result = await service.findPublic({ page: 2, limit: 10 });
 
       expect(mockQb.skip).toHaveBeenCalledWith(10);

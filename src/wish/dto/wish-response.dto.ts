@@ -21,6 +21,7 @@ export interface WishPublicDto {
   updated_at: Date;
   user: UserPublicDto;
   donated_amount: number;
+  comments_count: number;
 }
 
 export interface PaginatedWishesDto {

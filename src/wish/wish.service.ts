@@ -62,9 +62,22 @@ export class WishService {
     } else {
       qb.orderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
     }
+
+    qb.addSelect(
+      '(SELECT COUNT(c.id)::int FROM comments c WHERE c.wish_id = wish.id)',
+      'comments_count',
+    );
+
+    // getCount() exécute un SELECT COUNT(*) indépendant (ignore skip/take et addSelect)
+    const total = await qb.getCount();
     qb.skip((page - 1) * limit).take(limit);
 
-    const [data, total] = await qb.getManyAndCount();
+    const { entities, raw } = await qb.getRawAndEntities();
+    const data = entities.map((entity, i) => ({
+      ...entity,
+      comments_count: parseInt(raw[i]?.comments_count ?? '0', 10),
+    }));
+
     return { data: data as unknown as WishPublicDto[], total, page, limit };
   }
 
@@ -75,6 +88,10 @@ export class WishService {
       .addSelect(
         `(SELECT COALESCE(SUM(d.amount), 0) FROM donations d WHERE d.wish_id = wish.id AND d.status = 'completed')`,
         'donated_amount',
+      )
+      .addSelect(
+        '(SELECT COUNT(c.id)::int FROM comments c WHERE c.wish_id = wish.id)',
+        'comments_count',
       )
       .where('wish.id = :id AND wish.is_private = :isPrivate', {
         id,
@@ -87,7 +104,8 @@ export class WishService {
     }
 
     const donated_amount = parseFloat(raw[0]?.donated_amount ?? '0');
-    return { ...entities[0], donated_amount } as unknown as WishPublicDto;
+    const comments_count = parseInt(raw[0]?.comments_count ?? '0', 10);
+    return { ...entities[0], donated_amount, comments_count } as unknown as WishPublicDto;
   }
 
   private resolveSortField(sort: string): string {
