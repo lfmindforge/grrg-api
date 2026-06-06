@@ -5,9 +5,10 @@ import { Evaluation } from './evaluation.entity';
 import { Wish } from '../wish/wish.entity';
 import { DonationController } from './donation.controller';
 import { DonationService } from './donation.service';
+import { BadgeModule } from '../badge/badge.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Donation, Evaluation, Wish])],
+  imports: [TypeOrmModule.forFeature([Donation, Evaluation, Wish]), BadgeModule],
   controllers: [DonationController],
   providers: [DonationService],
 })
