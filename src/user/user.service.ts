@@ -19,6 +19,7 @@ import { WishStatus } from '../wish/wish.types';
 import { DonationStatus } from '../donation/donation.types';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { BadgeService } from '../badge/badge.service';
 
 @Injectable()
 export class UserService {
@@ -29,6 +30,7 @@ export class UserService {
     @InjectRepository(Follow) private readonly followRepo: Repository<Follow>,
     private readonly supabaseStorage: SupabaseStorageService,
     private readonly config: ConfigService,
+    private readonly badgeService: BadgeService,
   ) {}
 
   findByEmail(email: string): Promise<User | null> {
@@ -54,7 +56,7 @@ export class UserService {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('Utilisateur introuvable');
 
-    const [wishes, donations_count, followers_count, following_count] =
+    const [wishes, donations_count, followers_count, following_count, badgeEntities] =
       await Promise.all([
         this.wishRepo.find({
           where: { user_id: id, is_private: false, status: Not(WishStatus.CANCELLED) },
@@ -63,6 +65,7 @@ export class UserService {
         this.donationRepo.count({ where: { donor_id: id, status: DonationStatus.COMPLETED } }),
         this.followRepo.count({ where: { followed_id: id } }),
         this.followRepo.count({ where: { follower_id: id } }),
+        this.badgeService.findByUser(id),
       ]);
 
     const gallery: WishPreviewDto[] = wishes.map((w) => ({
@@ -78,7 +81,7 @@ export class UserService {
       avatar_url: user.avatar_url,
       grade: user.grade,
       glow_points: user.glow_points,
-      badges: [],
+      badges: badgeEntities.map((b) => this.badgeService.toDto(b)),
       donations_count,
       followers_count,
       following_count,

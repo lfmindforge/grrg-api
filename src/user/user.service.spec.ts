@@ -9,6 +9,7 @@ import { Follow } from '../follow/follow.entity';
 import { UserService } from './user.service';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { WishStatus } from '../wish/wish.types';
+import { BadgeService } from '../badge/badge.service';
 
 const mockUserRepo = {
   findOne: jest.fn(),
@@ -34,6 +35,11 @@ const mockStorage = {
   extractPath: jest.fn().mockReturnValue('user-id/old-avatar.jpg'),
 };
 
+const mockBadgeService = {
+  findByUser: jest.fn().mockResolvedValue([]),
+  toDto: jest.fn((b: unknown) => b),
+};
+
 describe('UserService', () => {
   let service: UserService;
 
@@ -47,6 +53,7 @@ describe('UserService', () => {
         { provide: getRepositoryToken(Follow), useValue: mockFollowRepo },
         { provide: SupabaseStorageService, useValue: mockStorage },
         { provide: ConfigService, useValue: { getOrThrow: () => 'avatars' } },
+        { provide: BadgeService, useValue: mockBadgeService },
       ],
     }).compile();
 
