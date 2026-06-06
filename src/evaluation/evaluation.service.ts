@@ -12,12 +12,14 @@ import { Evaluation } from '../donation/evaluation.entity';
 import { Donation } from '../donation/donation.entity';
 import { User } from '../user/user.entity';
 import { Wish } from '../wish/wish.entity';
-import { DonationStatus, EvaluationBonus } from '../donation/donation.types';
+import { DonationStatus, EvaluationBonus, EvaluationSatisfaction } from '../donation/donation.types';
 import { WishStatus } from '../wish/wish.types';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import { GlowService } from '../common/glow.service';
 import { NotificationService } from '../notifications/notification.service';
+import { BadgeService } from '../badge/badge.service';
+import { BadgeType } from '../badge/badge.types';
 
 @Injectable()
 export class EvaluationService {
@@ -34,6 +36,7 @@ export class EvaluationService {
     private readonly config: ConfigService,
     private readonly glowService: GlowService,
     private readonly notificationService: NotificationService,
+    private readonly badgeService: BadgeService,
   ) {}
 
   async evaluate(
@@ -122,6 +125,16 @@ export class EvaluationService {
       donsManquants: progression.donsManquants,
     });
     // TODO US-020 — NotificationService.pushSSE(donation.donor_id, notification)
+
+    if (donation.is_anonymous) {
+      await this.badgeService.award(donation.donor_id, BadgeType.MYSTERY_ANONYMOUS);
+    }
+    if (
+      evaluation.bonus === EvaluationBonus.WENT_ABOVE_AND_BEYOND &&
+      evaluation.satisfaction === EvaluationSatisfaction.THRILLED
+    ) {
+      await this.badgeService.award(donation.donor_id, BadgeType.MOST_IMPROBABLE_WISH);
+    }
 
     return evaluation;
   }

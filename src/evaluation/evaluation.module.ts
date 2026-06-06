@@ -9,12 +9,14 @@ import { EvaluationController } from './evaluation.controller';
 import { EvaluationService } from './evaluation.service';
 import { GlowService } from '../common/glow.service';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { BadgeModule } from '../badge/badge.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Evaluation, Donation, Wish, User]),
     StorageModule,
     NotificationsModule,
+    BadgeModule,
   ],
   controllers: [EvaluationController],
   providers: [EvaluationService, GlowService],

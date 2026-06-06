@@ -11,6 +11,8 @@ import { Wish } from '../wish/wish.entity';
 import { DonationType, WishStatus } from '../wish/wish.types';
 import { DonationStatus } from './donation.types';
 import { CreateDonationDto } from './dto/create-donation.dto';
+import { BadgeService } from '../badge/badge.service';
+import { BadgeType } from '../badge/badge.types';
 
 describe('DonationService', () => {
   let service: DonationService;
@@ -19,9 +21,11 @@ describe('DonationService', () => {
     save: jest.Mock;
     findOne: jest.Mock;
     find: jest.Mock;
+    count: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
   let wishRepo: { findOne: jest.Mock; save: jest.Mock };
+  let badgeService: { award: jest.Mock };
 
   let mockQb: {
     innerJoinAndSelect: jest.Mock;
@@ -39,6 +43,7 @@ describe('DonationService', () => {
     id: WISH_ID,
     user_id: OWNER_ID,
     status: WishStatus.PENDING,
+    created_at: new Date(Date.now() - 2 * 3600 * 1000), // 2h ago — ne déclenche pas fastest_donor
   } as Wish;
 
   beforeEach(async () => {
@@ -54,15 +59,18 @@ describe('DonationService', () => {
       save: jest.fn(),
       findOne: jest.fn(),
       find: jest.fn(),
+      count: jest.fn().mockResolvedValue(2), // défaut : 2e don — ne déclenche pas fastest_donor
       createQueryBuilder: jest.fn().mockReturnValue(mockQb),
     };
     wishRepo = { findOne: jest.fn(), save: jest.fn() };
+    badgeService = { award: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DonationService,
         { provide: getRepositoryToken(Donation), useValue: donationRepo },
         { provide: getRepositoryToken(Wish), useValue: wishRepo },
+        { provide: BadgeService, useValue: badgeService },
       ],
     }).compile();
 
@@ -370,6 +378,58 @@ describe('DonationService', () => {
       const result = await service.findMyDonations(DONOR_ID);
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('propose() — badge fastest_donor', () => {
+    const recentWish = {
+      id: WISH_ID,
+      user_id: OWNER_ID,
+      status: WishStatus.PENDING,
+      created_at: new Date(Date.now() - 10 * 60 * 1000), // 10 min ago
+    };
+    const dto: CreateDonationDto = {
+      wish_id: WISH_ID,
+      type: DonationType.FINANCIAL,
+      amount: 10,
+      is_anonymous: false,
+    };
+
+    it('attribue fastest_donor si 1er don sur souhait posté depuis < 1h', async () => {
+      wishRepo.findOne.mockResolvedValue({ ...recentWish });
+      donationRepo.create.mockReturnValue({ id: 'don-uuid' });
+      donationRepo.save.mockResolvedValue({ id: 'don-uuid', wish_id: WISH_ID });
+      donationRepo.count.mockResolvedValue(1);
+      wishRepo.save.mockResolvedValue({});
+
+      await service.propose(DONOR_ID, dto);
+
+      expect(badgeService.award).toHaveBeenCalledWith(DONOR_ID, BadgeType.FASTEST_DONOR);
+    });
+
+    it("n'attribue pas fastest_donor si ce n'est pas le 1er don", async () => {
+      wishRepo.findOne.mockResolvedValue({ ...recentWish });
+      donationRepo.create.mockReturnValue({ id: 'don-uuid' });
+      donationRepo.save.mockResolvedValue({ id: 'don-uuid', wish_id: WISH_ID });
+      donationRepo.count.mockResolvedValue(2);
+      wishRepo.save.mockResolvedValue({});
+
+      await service.propose(DONOR_ID, dto);
+
+      expect(badgeService.award).not.toHaveBeenCalled();
+    });
+
+    it("n'attribue pas fastest_donor si le souhait a plus d'1h", async () => {
+      const oldWish = { ...recentWish, created_at: new Date(Date.now() - 2 * 3600 * 1000) };
+      wishRepo.findOne.mockResolvedValue({ ...oldWish });
+      donationRepo.create.mockReturnValue({ id: 'don-uuid' });
+      donationRepo.save.mockResolvedValue({ id: 'don-uuid', wish_id: WISH_ID });
+      donationRepo.count.mockResolvedValue(1);
+      wishRepo.save.mockResolvedValue({});
+
+      await service.propose(DONOR_ID, dto);
+
+      expect(badgeService.award).not.toHaveBeenCalled();
     });
   });
 

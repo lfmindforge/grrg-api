@@ -8,9 +8,10 @@ import { UserService } from './user.service';
 import { UserController } from './user.controller';
 import { StorageModule } from '../common/storage/storage.module';
 import { FollowModule } from '../follow/follow.module';
+import { BadgeModule } from '../badge/badge.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Wish, Donation, Follow]), StorageModule, FollowModule],
+  imports: [TypeOrmModule.forFeature([User, Wish, Donation, Follow]), StorageModule, FollowModule, BadgeModule],
   controllers: [UserController],
   providers: [UserService],
   exports: [UserService],

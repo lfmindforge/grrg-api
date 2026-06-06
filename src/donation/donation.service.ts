@@ -11,6 +11,8 @@ import { Wish } from '../wish/wish.entity';
 import { DonationType, WishStatus } from '../wish/wish.types';
 import { DonationStatus } from './donation.types';
 import { CreateDonationDto } from './dto/create-donation.dto';
+import { BadgeService } from '../badge/badge.service';
+import { BadgeType } from '../badge/badge.types';
 
 @Injectable()
 export class DonationService {
@@ -19,6 +21,7 @@ export class DonationService {
     private readonly donationRepo: Repository<Donation>,
     @InjectRepository(Wish)
     private readonly wishRepo: Repository<Wish>,
+    private readonly badgeService: BadgeService,
   ) {}
 
   async propose(donorId: string, dto: CreateDonationDto): Promise<Donation> {
@@ -49,6 +52,12 @@ export class DonationService {
     const saved = await this.donationRepo.save(donation);
     wish.status = WishStatus.IN_PROGRESS;
     await this.wishRepo.save(wish);
+
+    const donationCount = await this.donationRepo.count({ where: { wish_id: dto.wish_id } });
+    const wishAgeMs = Date.now() - wish.created_at.getTime();
+    if (donationCount === 1 && wishAgeMs < 3_600_000) {
+      await this.badgeService.award(donorId, BadgeType.FASTEST_DONOR);
+    }
 
     // TODO US-020 — NotificationService.notify(wish.user_id, { type: 'donation_proposed', donation_id: saved.id })
     return saved;
