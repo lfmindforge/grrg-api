@@ -22,6 +22,8 @@ import { DonationType, WishStatus } from '../wish/wish.types';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import { GlowService } from '../common/glow.service';
 import { NotificationService } from '../notifications/notification.service';
+import { BadgeService } from '../badge/badge.service';
+import { BadgeType } from '../badge/badge.types';
 
 describe('EvaluationService', () => {
   let service: EvaluationService;
@@ -42,6 +44,7 @@ describe('EvaluationService', () => {
     getGradeProgression: jest.Mock;
   };
   let notificationService: { create: jest.Mock };
+  let badgeService: { award: jest.Mock };
 
   const RECEIVER_ID = 'receiver-uuid';
   const DONOR_ID = 'donor-uuid';
@@ -112,6 +115,7 @@ describe('EvaluationService', () => {
       }),
     };
     notificationService = { create: jest.fn().mockResolvedValue({}) };
+    badgeService = { award: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -124,6 +128,7 @@ describe('EvaluationService', () => {
         { provide: ConfigService, useValue: config },
         { provide: GlowService, useValue: glowService },
         { provide: NotificationService, useValue: notificationService },
+        { provide: BadgeService, useValue: badgeService },
       ],
     }).compile();
 
@@ -297,6 +302,70 @@ describe('EvaluationService', () => {
       await expect(
         service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, undefined),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('evaluate() — badges', () => {
+    beforeEach(() => {
+      donationRepo.findOne.mockResolvedValue({ ...mockDonation, is_anonymous: false });
+      evaluationRepo.findOne.mockResolvedValue(null);
+      config.getOrThrow.mockReturnValue('evaluations-proof');
+      supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
+      evaluationRepo.create.mockReturnValue({ ...mockEvaluation });
+      evaluationRepo.save.mockResolvedValue({ ...mockEvaluation });
+      userRepo.findOne.mockResolvedValue({ ...mockDonor });
+      evaluationRepo.count.mockResolvedValue(1);
+      userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
+      wishRepo.save.mockResolvedValue({});
+      notificationService.create.mockResolvedValue({});
+    });
+
+    it('attribue mystery_anonymous si le don est anonyme', async () => {
+      donationRepo.findOne.mockResolvedValue({ ...mockDonation, is_anonymous: true });
+
+      await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
+
+      expect(badgeService.award).toHaveBeenCalledWith(DONOR_ID, BadgeType.MYSTERY_ANONYMOUS);
+    });
+
+    it("n'attribue pas mystery_anonymous si le don n'est pas anonyme", async () => {
+      await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
+
+      expect(badgeService.award).not.toHaveBeenCalledWith(DONOR_ID, BadgeType.MYSTERY_ANONYMOUS);
+    });
+
+    it('attribue most_improbable_wish si went_above_and_beyond + thrilled', async () => {
+      const dto: CreateEvaluationDto = {
+        satisfaction: EvaluationSatisfaction.THRILLED,
+        bonus: EvaluationBonus.WENT_ABOVE_AND_BEYOND,
+        description: 'Incroyable',
+      };
+      evaluationRepo.save.mockResolvedValue({
+        ...mockEvaluation,
+        bonus: EvaluationBonus.WENT_ABOVE_AND_BEYOND,
+        satisfaction: EvaluationSatisfaction.THRILLED,
+      });
+
+      await service.evaluate(RECEIVER_ID, DONATION_ID, dto, mockFile);
+
+      expect(badgeService.award).toHaveBeenCalledWith(DONOR_ID, BadgeType.MOST_IMPROBABLE_WISH);
+    });
+
+    it("n'attribue pas most_improbable_wish si satisfaction < thrilled", async () => {
+      const dto: CreateEvaluationDto = {
+        satisfaction: EvaluationSatisfaction.HAPPY,
+        bonus: EvaluationBonus.WENT_ABOVE_AND_BEYOND,
+        description: 'Bien',
+      };
+      evaluationRepo.save.mockResolvedValue({
+        ...mockEvaluation,
+        bonus: EvaluationBonus.WENT_ABOVE_AND_BEYOND,
+        satisfaction: EvaluationSatisfaction.HAPPY,
+      });
+
+      await service.evaluate(RECEIVER_ID, DONATION_ID, dto, mockFile);
+
+      expect(badgeService.award).not.toHaveBeenCalledWith(DONOR_ID, BadgeType.MOST_IMPROBABLE_WISH);
     });
   });
 });
