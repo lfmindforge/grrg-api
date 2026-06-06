@@ -9,4 +9,5 @@ export interface BadgeDto {
   badge_type: string;
   period: string | null;
   earned_at: Date;
+  count: number;
 }

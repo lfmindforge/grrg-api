@@ -19,9 +19,12 @@ export class BadgeService {
     const existing = await this.badgeRepo.findOne({
       where: { user_id: userId, badge_type: type, period: period ?? IsNull() },
     });
-    if (existing) return;
+    if (existing) {
+      await this.badgeRepo.save({ ...existing, count: existing.count + 1 });
+      return;
+    }
     await this.badgeRepo.save(
-      this.badgeRepo.create({ user_id: userId, badge_type: type, period: period ?? null }),
+      this.badgeRepo.create({ user_id: userId, badge_type: type, period: period ?? null, count: 1 }),
     );
   }
 
@@ -33,7 +36,7 @@ export class BadgeService {
   }
 
   toDto(badge: Badge): BadgeDto {
-    return { badge_type: badge.badge_type, period: badge.period, earned_at: badge.earned_at };
+    return { badge_type: badge.badge_type, period: badge.period, earned_at: badge.earned_at, count: badge.count };
   }
 
   // Exécuté le 1er du mois à minuit — attribue le badge du mois précédent

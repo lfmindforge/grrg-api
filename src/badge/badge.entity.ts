@@ -19,6 +19,9 @@ export class Badge {
   @Column({ type: 'varchar', length: 7, nullable: true })
   period!: string | null;
 
+  @Column({ type: 'int', default: 1 })
+  count!: number;
+
   @CreateDateColumn()
   earned_at!: Date;
 }

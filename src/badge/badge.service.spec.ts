@@ -53,7 +53,7 @@ describe('BadgeService', () => {
   });
 
   describe('award()', () => {
-    it('insère le badge si inexistant', async () => {
+    it('insère le badge avec count=1 si inexistant', async () => {
       badgeRepo.findOne.mockResolvedValue(null);
       await service.award(USER_ID, BadgeType.MYSTERY_ANONYMOUS);
       expect(badgeRepo.save).toHaveBeenCalledWith(
@@ -61,28 +61,33 @@ describe('BadgeService', () => {
           user_id: USER_ID,
           badge_type: BadgeType.MYSTERY_ANONYMOUS,
           period: null,
+          count: 1,
         }),
       );
     });
 
-    it('ne réinsère pas si le badge cumulatif existe déjà', async () => {
-      badgeRepo.findOne.mockResolvedValue({ id: 'existing' });
+    it('incrémente le count si le badge existe déjà', async () => {
+      badgeRepo.findOne.mockResolvedValue({ id: 'existing', count: 2 });
       await service.award(USER_ID, BadgeType.MYSTERY_ANONYMOUS);
-      expect(badgeRepo.save).not.toHaveBeenCalled();
-    });
-
-    it('insère biggest_donor_month pour un nouveau period', async () => {
-      badgeRepo.findOne.mockResolvedValue(null);
-      await service.award(USER_ID, BadgeType.BIGGEST_DONOR_MONTH, '2026-06');
       expect(badgeRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ period: '2026-06', badge_type: BadgeType.BIGGEST_DONOR_MONTH }),
+        expect.objectContaining({ id: 'existing', count: 3 }),
       );
     });
 
-    it('ne réinsère pas biggest_donor_month pour le même period', async () => {
-      badgeRepo.findOne.mockResolvedValue({ id: 'existing' });
+    it('insère biggest_donor_month avec count=1 pour un nouveau period', async () => {
+      badgeRepo.findOne.mockResolvedValue(null);
       await service.award(USER_ID, BadgeType.BIGGEST_DONOR_MONTH, '2026-06');
-      expect(badgeRepo.save).not.toHaveBeenCalled();
+      expect(badgeRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ period: '2026-06', badge_type: BadgeType.BIGGEST_DONOR_MONTH, count: 1 }),
+      );
+    });
+
+    it('incrémente biggest_donor_month si le même period existe', async () => {
+      badgeRepo.findOne.mockResolvedValue({ id: 'existing', count: 1 });
+      await service.award(USER_ID, BadgeType.BIGGEST_DONOR_MONTH, '2026-06');
+      expect(badgeRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'existing', count: 2 }),
+      );
     });
   });
 
