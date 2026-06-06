@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from '@nestjs/cache-manager';
+import { ScheduleModule } from '@nestjs/schedule';
 import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { APP_GUARD } from '@nestjs/core';
@@ -16,11 +17,14 @@ import { FollowModule } from './follow/follow.module';
 import { CommentModule } from './comment/comment.module';
 import { ReactionModule } from './reaction/reaction.module';
 import { FeedModule } from './feed/feed.module';
+import { BadgeModule } from './badge/badge.module';
 import KeyvRedis from '@keyv/redis';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
+    BadgeModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({

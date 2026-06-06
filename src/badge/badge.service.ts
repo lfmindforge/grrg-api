@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
 import { Badge } from './badge.entity';
 import { Evaluation } from '../donation/evaluation.entity';
@@ -17,7 +17,7 @@ export class BadgeService {
 
   async award(userId: string, type: BadgeType, period?: string): Promise<void> {
     const existing = await this.badgeRepo.findOne({
-      where: { user_id: userId, badge_type: type, period: period ?? null },
+      where: { user_id: userId, badge_type: type, period: period ?? IsNull() },
     });
     if (existing) return;
     await this.badgeRepo.save(
