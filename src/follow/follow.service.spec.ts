@@ -4,6 +4,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { Follow } from './follow.entity';
 import { User } from '../user/user.entity';
 import { FollowService } from './follow.service';
+import { NotificationService } from '../notifications/notification.service';
 
 const mockDataSource = {
   query: jest.fn(),
@@ -21,6 +22,10 @@ const mockUserRepo = {
   findOne: jest.fn(),
 };
 
+const mockNotificationService = {
+  notify: jest.fn().mockResolvedValue(undefined),
+};
+
 describe('FollowService', () => {
   let service: FollowService;
 
@@ -31,6 +36,7 @@ describe('FollowService', () => {
         { provide: getRepositoryToken(Follow), useValue: mockFollowRepo },
         { provide: getRepositoryToken(User), useValue: mockUserRepo },
         { provide: getDataSourceToken(), useValue: mockDataSource },
+        { provide: NotificationService, useValue: mockNotificationService },
       ],
     }).compile();
 
@@ -65,6 +71,26 @@ describe('FollowService', () => {
       mockFollowRepo.findOne.mockResolvedValue({ follower_id: 'follower-id', followed_id: 'followed-id' });
       await expect(service.follow('follower-id', 'followed-id')).rejects.toThrow(ConflictException);
       expect(mockFollowRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('envoie new_follower au suivi avec le pseudo du follower', async () => {
+      const FOLLOWER_ID = 'follower-uuid';
+      const FOLLOWED_ID = 'followed-uuid';
+
+      mockUserRepo.findOne
+        .mockResolvedValueOnce({ id: FOLLOWED_ID, pseudo: 'Suivi' })
+        .mockResolvedValueOnce({ id: FOLLOWER_ID, pseudo: 'Follower' });
+      mockFollowRepo.findOne.mockResolvedValue(null);
+      mockFollowRepo.create.mockReturnValue({});
+      mockFollowRepo.save.mockResolvedValue({});
+
+      await service.follow(FOLLOWER_ID, FOLLOWED_ID);
+
+      expect(mockNotificationService.notify).toHaveBeenCalledWith(
+        FOLLOWED_ID,
+        'new_follower',
+        expect.objectContaining({ follower_pseudo: 'Follower', follower_id: FOLLOWER_ID }),
+      );
     });
   });
 
