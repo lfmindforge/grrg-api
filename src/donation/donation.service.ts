@@ -8,11 +8,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Donation } from './donation.entity';
 import { Wish } from '../wish/wish.entity';
+import { User } from '../user/user.entity';
 import { DonationType, WishStatus } from '../wish/wish.types';
 import { DonationStatus } from './donation.types';
 import { CreateDonationDto } from './dto/create-donation.dto';
 import { BadgeService } from '../badge/badge.service';
 import { BadgeType } from '../badge/badge.types';
+import { NotificationService } from '../notifications/notification.service';
+import { NotificationType, truncateTitle } from '../notifications/notification.types';
 
 @Injectable()
 export class DonationService {
@@ -21,7 +24,10 @@ export class DonationService {
     private readonly donationRepo: Repository<Donation>,
     @InjectRepository(Wish)
     private readonly wishRepo: Repository<Wish>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly badgeService: BadgeService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async propose(donorId: string, dto: CreateDonationDto): Promise<Donation> {
@@ -59,7 +65,15 @@ export class DonationService {
       await this.badgeService.award(donorId, BadgeType.FASTEST_DONOR);
     }
 
-    // TODO US-020 — NotificationService.notify(wish.user_id, { type: 'donation_proposed', donation_id: saved.id })
+    const donor = await this.userRepo.findOne({ where: { id: donorId } });
+    await this.notificationService.notify(wish.user_id, NotificationType.DONATION_RECEIVED, {
+      donor_pseudo: donor!.pseudo,
+      is_anonymous: saved.is_anonymous,
+      wish_title: truncateTitle(wish.title),
+      wish_id: wish.id,
+      donation_id: saved.id,
+    });
+
     return saved;
   }
 
