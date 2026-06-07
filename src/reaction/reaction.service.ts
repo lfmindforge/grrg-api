@@ -3,14 +3,19 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Reaction } from './reaction.entity';
 import { Wish } from '../wish/wish.entity';
+import { User } from '../user/user.entity';
 import { UpsertReactionDto } from './dto/upsert-reaction.dto';
 import { MyReactionDto } from './reaction.types';
+import { NotificationService } from '../notifications/notification.service';
+import { NotificationType, truncateTitle } from '../notifications/notification.types';
 
 @Injectable()
 export class ReactionService {
   constructor(
     @InjectRepository(Reaction) private readonly reactionRepo: Repository<Reaction>,
     @InjectRepository(Wish) private readonly wishRepo: Repository<Wish>,
+    @InjectRepository(User) private readonly userRepo: Repository<User>,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async upsert(userId: string, wishId: string, dto: UpsertReactionDto): Promise<void> {
@@ -24,6 +29,15 @@ export class ReactionService {
     } else {
       const reaction = this.reactionRepo.create({ user_id: userId, wish_id: wishId, emoji: dto.emoji });
       await this.reactionRepo.save(reaction);
+      if (wish.user_id !== userId) {
+        const reactor = await this.userRepo.findOne({ where: { id: userId } });
+        await this.notificationService.notify(wish.user_id, NotificationType.REACTION_RECEIVED, {
+          reactor_pseudo: reactor!.pseudo,
+          emoji: dto.emoji,
+          wish_title: truncateTitle(wish.title),
+          wish_id: wishId,
+        });
+      }
     }
   }
 

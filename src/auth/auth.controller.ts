@@ -44,6 +44,7 @@ export class AuthController {
   ) {
     const { access_token, refresh_token } = await this.authService.login(dto);
     this.setRefreshCookie(res, refresh_token);
+    this.setAccessCookie(res, access_token);
     return { access_token };
   }
 
@@ -59,6 +60,7 @@ export class AuthController {
     const { access_token, refresh_token } =
       await this.authService.refresh(token);
     this.setRefreshCookie(res, refresh_token);
+    this.setAccessCookie(res, access_token);
     return { access_token };
   }
 
@@ -72,6 +74,11 @@ export class AuthController {
       path: '/',
       sameSite:
         this.config.get('NODE_ENV') === 'production' ? 'none' : 'strict',
+      secure: this.config.get('NODE_ENV') === 'production',
+    });
+    res.clearCookie('access_token', {
+      path: '/',
+      sameSite: this.config.get('NODE_ENV') === 'production' ? 'none' : 'strict',
       secure: this.config.get('NODE_ENV') === 'production',
     });
   }
@@ -98,6 +105,7 @@ export class AuthController {
       return res.redirect(`${frontendUrl}/login?error=${user.error}`);
     }
     this.setRefreshCookie(res, user.refresh_token!);
+    this.setAccessCookie(res, user.access_token!);
     return res.redirect(`${frontendUrl}/auth/callback`);
   }
 
@@ -123,6 +131,7 @@ export class AuthController {
       return res.redirect(`${frontendUrl}/login?error=${user.error}`);
     }
     this.setRefreshCookie(res, user.refresh_token!);
+    this.setAccessCookie(res, user.access_token!);
     return res.redirect(`${frontendUrl}/auth/callback`);
   }
 
@@ -134,6 +143,16 @@ export class AuthController {
       sameSite:
         this.config.get('NODE_ENV') === 'production' ? 'none' : 'strict',
       maxAge: Number(this.config.get('JWT_REFRESH_EXPIRES_MS')),
+      path: '/',
+    });
+  }
+
+  private setAccessCookie(res: Response, token: string): void {
+    res.cookie('access_token', token, {
+      httpOnly: true,
+      secure: this.config.get('NODE_ENV') === 'production',
+      sameSite: this.config.get('NODE_ENV') === 'production' ? 'none' : 'strict',
+      maxAge: 15 * 60 * 1000,
       path: '/',
     });
   }

@@ -4,6 +4,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Comment } from './comment.entity';
 import { Wish } from '../wish/wish.entity';
 import { CommentService } from './comment.service';
+import { NotificationService } from '../notifications/notification.service';
 
 const mockQb = {
   leftJoinAndSelect: jest.fn().mockReturnThis(),
@@ -26,6 +27,10 @@ const mockWishRepo = {
   findOne: jest.fn(),
 };
 
+const mockNotificationService = {
+  notify: jest.fn().mockResolvedValue(undefined),
+};
+
 describe('CommentService', () => {
   let service: CommentService;
 
@@ -35,6 +40,7 @@ describe('CommentService', () => {
         CommentService,
         { provide: getRepositoryToken(Comment), useValue: mockCommentRepo },
         { provide: getRepositoryToken(Wish), useValue: mockWishRepo },
+        { provide: NotificationService, useValue: mockNotificationService },
       ],
     }).compile();
 
@@ -101,7 +107,7 @@ describe('CommentService', () => {
 
   describe('addComment()', () => {
     it('crée et retourne un commentaire avec les données auteur', async () => {
-      const wish = { id: 'wish-1', is_private: false };
+      const wish = { id: 'wish-1', user_id: 'wish-owner', is_private: false, title: 'Souhait test' };
       const saved = { id: 'c-new' };
       const full = {
         id: 'c-new',
@@ -134,6 +140,43 @@ describe('CommentService', () => {
         service.addComment('u-1', 'unknown', { content: 'test' }),
       ).rejects.toThrow(NotFoundException);
       expect(mockCommentRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('envoie comment_received au créateur du souhait si différent du commentateur', async () => {
+      const COMMENTER_ID = 'commenter-uuid';
+      const OWNER_ID = 'owner-uuid';
+      const wish = { id: 'w1', user_id: OWNER_ID, is_private: false, title: 'Mon souhait' };
+      const saved = { id: 'c1' };
+      const full = { id: 'c1', wish_id: 'w1', content: 'Super !', is_reported: false, created_at: new Date(), user: { id: COMMENTER_ID, pseudo: 'Commentateur', avatar_url: null, grade: 'etincelle' } };
+
+      mockWishRepo.findOne.mockResolvedValue(wish);
+      mockCommentRepo.create.mockReturnValue(saved);
+      mockCommentRepo.save.mockResolvedValue(saved);
+      mockCommentRepo.findOne.mockResolvedValue(full);
+
+      await service.addComment(COMMENTER_ID, 'w1', { content: 'Super souhait !' });
+
+      expect(mockNotificationService.notify).toHaveBeenCalledWith(
+        OWNER_ID,
+        'comment_received',
+        expect.objectContaining({ commenter_pseudo: 'Commentateur', wish_id: 'w1', comment_id: 'c1' }),
+      );
+    });
+
+    it("n'envoie pas comment_received si le commentateur est le créateur du souhait", async () => {
+      const OWNER_ID = 'owner-uuid';
+      const wish = { id: 'w1', user_id: OWNER_ID, is_private: false, title: 'Mon souhait' };
+      const saved = { id: 'c1' };
+      const full = { id: 'c1', wish_id: 'w1', content: 'Test', is_reported: false, created_at: new Date(), user: { id: OWNER_ID, pseudo: 'Owner', avatar_url: null, grade: 'etincelle' } };
+
+      mockWishRepo.findOne.mockResolvedValue(wish);
+      mockCommentRepo.create.mockReturnValue(saved);
+      mockCommentRepo.save.mockResolvedValue(saved);
+      mockCommentRepo.findOne.mockResolvedValue(full);
+
+      await service.addComment(OWNER_ID, 'w1', { content: 'Mon propre commentaire' });
+
+      expect(mockNotificationService.notify).not.toHaveBeenCalled();
     });
   });
 

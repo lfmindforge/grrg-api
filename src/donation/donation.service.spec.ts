@@ -8,11 +8,13 @@ import {
 import { DonationService } from './donation.service';
 import { Donation } from './donation.entity';
 import { Wish } from '../wish/wish.entity';
+import { User } from '../user/user.entity';
 import { DonationType, WishStatus } from '../wish/wish.types';
 import { DonationStatus } from './donation.types';
 import { CreateDonationDto } from './dto/create-donation.dto';
 import { BadgeService } from '../badge/badge.service';
 import { BadgeType } from '../badge/badge.types';
+import { NotificationService } from '../notifications/notification.service';
 
 describe('DonationService', () => {
   let service: DonationService;
@@ -25,7 +27,9 @@ describe('DonationService', () => {
     createQueryBuilder: jest.Mock;
   };
   let wishRepo: { findOne: jest.Mock; save: jest.Mock };
+  let userRepo: { findOne: jest.Mock };
   let badgeService: { award: jest.Mock };
+  let notificationService: { notify: jest.Mock };
 
   let mockQb: {
     innerJoinAndSelect: jest.Mock;
@@ -42,6 +46,7 @@ describe('DonationService', () => {
   const mockWish = {
     id: WISH_ID,
     user_id: OWNER_ID,
+    title: 'Test souhait',
     status: WishStatus.PENDING,
     created_at: new Date(Date.now() - 2 * 3600 * 1000), // 2h ago — ne déclenche pas fastest_donor
   } as Wish;
@@ -63,14 +68,18 @@ describe('DonationService', () => {
       createQueryBuilder: jest.fn().mockReturnValue(mockQb),
     };
     wishRepo = { findOne: jest.fn(), save: jest.fn() };
+    userRepo = { findOne: jest.fn().mockResolvedValue({ pseudo: 'DonorPseudo' }) };
     badgeService = { award: jest.fn().mockResolvedValue(undefined) };
+    notificationService = { notify: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DonationService,
         { provide: getRepositoryToken(Donation), useValue: donationRepo },
         { provide: getRepositoryToken(Wish), useValue: wishRepo },
+        { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: BadgeService, useValue: badgeService },
+        { provide: NotificationService, useValue: notificationService },
       ],
     }).compile();
 
@@ -236,7 +245,7 @@ describe('DonationService', () => {
         donor_id: DONOR_ID,
         status: DonationStatus.PENDING,
       };
-      wishRepo.findOne.mockResolvedValue(mockWish);
+      wishRepo.findOne.mockResolvedValue({ ...mockWish });
       donationRepo.create.mockReturnValue(created);
       donationRepo.save.mockResolvedValue(created);
       wishRepo.save.mockResolvedValue({
@@ -248,6 +257,40 @@ describe('DonationService', () => {
 
       expect(wishRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ status: WishStatus.IN_PROGRESS }),
+      );
+    });
+
+    it('envoie donation_received au créateur du souhait', async () => {
+      const dto: CreateDonationDto = { wish_id: WISH_ID, type: DonationType.FINANCIAL, amount: 50, is_anonymous: false };
+      const created = { id: 'don-uuid', wish_id: WISH_ID, donor_id: DONOR_ID, is_anonymous: false, status: DonationStatus.PENDING };
+      wishRepo.findOne.mockResolvedValue({ ...mockWish, title: 'Je veux un vélo' });
+      donationRepo.create.mockReturnValue(created);
+      donationRepo.save.mockResolvedValue(created);
+      wishRepo.save.mockResolvedValue({});
+
+      await service.propose(DONOR_ID, dto);
+
+      expect(notificationService.notify).toHaveBeenCalledWith(
+        OWNER_ID,
+        'donation_received',
+        expect.objectContaining({ donor_pseudo: 'DonorPseudo', is_anonymous: false, wish_id: WISH_ID }),
+      );
+    });
+
+    it('masque le pseudo si donation anonyme', async () => {
+      const dto: CreateDonationDto = { wish_id: WISH_ID, type: DonationType.FINANCIAL, amount: 50, is_anonymous: true };
+      const created = { id: 'don-uuid', wish_id: WISH_ID, donor_id: DONOR_ID, is_anonymous: true, status: DonationStatus.PENDING };
+      wishRepo.findOne.mockResolvedValue({ ...mockWish, title: 'Souhait' });
+      donationRepo.create.mockReturnValue(created);
+      donationRepo.save.mockResolvedValue(created);
+      wishRepo.save.mockResolvedValue({});
+
+      await service.propose(DONOR_ID, dto);
+
+      expect(notificationService.notify).toHaveBeenCalledWith(
+        OWNER_ID,
+        'donation_received',
+        expect.objectContaining({ is_anonymous: true }),
       );
     });
   });
@@ -385,6 +428,7 @@ describe('DonationService', () => {
     const recentWish = {
       id: WISH_ID,
       user_id: OWNER_ID,
+      title: 'Souhait récent',
       status: WishStatus.PENDING,
       created_at: new Date(Date.now() - 10 * 60 * 1000), // 10 min ago
     };

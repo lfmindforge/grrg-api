@@ -5,6 +5,8 @@ import { DataSource, Repository } from 'typeorm';
 import { Follow } from './follow.entity';
 import { User } from '../user/user.entity';
 import { SuggestionDto } from './follow.types';
+import { NotificationService } from '../notifications/notification.service';
+import { NotificationType } from '../notifications/notification.types';
 
 @Injectable()
 export class FollowService {
@@ -14,6 +16,7 @@ export class FollowService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async follow(followerId: string, followedId: string): Promise<void> {
@@ -30,6 +33,12 @@ export class FollowService {
 
     const follow = this.followRepo.create({ follower_id: followerId, followed_id: followedId });
     await this.followRepo.save(follow);
+
+    const follower = await this.userRepo.findOne({ where: { id: followerId } });
+    await this.notificationService.notify(followedId, NotificationType.NEW_FOLLOWER, {
+      follower_pseudo: follower!.pseudo,
+      follower_id: followerId,
+    });
   }
 
   async unfollow(followerId: string, followedId: string): Promise<void> {

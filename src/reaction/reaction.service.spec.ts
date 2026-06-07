@@ -3,7 +3,9 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { Reaction } from './reaction.entity';
 import { Wish } from '../wish/wish.entity';
+import { User } from '../user/user.entity';
 import { ReactionService } from './reaction.service';
+import { NotificationService } from '../notifications/notification.service';
 
 const mockReactionRepo = {
   findOne: jest.fn(),
@@ -16,6 +18,14 @@ const mockWishRepo = {
   findOne: jest.fn(),
 };
 
+const mockUserRepo = {
+  findOne: jest.fn(),
+};
+
+const mockNotificationService = {
+  notify: jest.fn().mockResolvedValue(undefined),
+};
+
 describe('ReactionService', () => {
   let service: ReactionService;
 
@@ -25,6 +35,8 @@ describe('ReactionService', () => {
         ReactionService,
         { provide: getRepositoryToken(Reaction), useValue: mockReactionRepo },
         { provide: getRepositoryToken(Wish), useValue: mockWishRepo },
+        { provide: getRepositoryToken(User), useValue: mockUserRepo },
+        { provide: NotificationService, useValue: mockNotificationService },
       ],
     }).compile();
 
@@ -34,10 +46,11 @@ describe('ReactionService', () => {
 
   describe('upsert()', () => {
     it('crée une nouvelle réaction si aucune existante', async () => {
-      mockWishRepo.findOne.mockResolvedValue({ id: 'w-1', is_private: false });
+      mockWishRepo.findOne.mockResolvedValue({ id: 'w-1', user_id: 'owner', is_private: false, title: 'Mon souhait' });
       mockReactionRepo.findOne.mockResolvedValue(null);
       mockReactionRepo.create.mockReturnValue({ user_id: 'u-1', wish_id: 'w-1', emoji: '❤️' });
       mockReactionRepo.save.mockResolvedValue({});
+      mockUserRepo.findOne.mockResolvedValue({ pseudo: 'Reacteur' });
 
       await service.upsert('u-1', 'w-1', { emoji: '❤️' });
 
@@ -47,7 +60,7 @@ describe('ReactionService', () => {
 
     it("met à jour l'emoji si une réaction existe déjà", async () => {
       const existing = { id: 'r-1', user_id: 'u-1', wish_id: 'w-1', emoji: '👏' };
-      mockWishRepo.findOne.mockResolvedValue({ id: 'w-1', is_private: false });
+      mockWishRepo.findOne.mockResolvedValue({ id: 'w-1', user_id: 'owner', is_private: false, title: 'Mon souhait' });
       mockReactionRepo.findOne.mockResolvedValue(existing);
       mockReactionRepo.save.mockResolvedValue({});
 
@@ -62,6 +75,54 @@ describe('ReactionService', () => {
 
       await expect(service.upsert('u-1', 'unknown', { emoji: '❤️' })).rejects.toThrow(NotFoundException);
       expect(mockReactionRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('envoie reaction_received au créateur du souhait sur nouvelle réaction', async () => {
+      const REACTOR_ID = 'reactor-uuid';
+      const OWNER_ID = 'owner-uuid';
+      const wish = { id: 'w1', user_id: OWNER_ID, is_private: false, title: 'Mon souhait' };
+
+      mockWishRepo.findOne.mockResolvedValue(wish);
+      mockReactionRepo.findOne.mockResolvedValue(null);
+      mockReactionRepo.create.mockReturnValue({ user_id: REACTOR_ID, wish_id: 'w1', emoji: '❤️' });
+      mockReactionRepo.save.mockResolvedValue({});
+      mockUserRepo.findOne.mockResolvedValue({ pseudo: 'Reacteur' });
+
+      await service.upsert(REACTOR_ID, 'w1', { emoji: '❤️' });
+
+      expect(mockNotificationService.notify).toHaveBeenCalledWith(
+        OWNER_ID,
+        'reaction_received',
+        expect.objectContaining({ reactor_pseudo: 'Reacteur', emoji: '❤️', wish_id: 'w1' }),
+      );
+    });
+
+    it("n'envoie pas reaction_received si mise à jour d'une réaction existante", async () => {
+      const REACTOR_ID = 'reactor-uuid';
+      const wish = { id: 'w1', user_id: 'owner-uuid', is_private: false, title: 'Mon souhait' };
+      const existing = { user_id: REACTOR_ID, wish_id: 'w1', emoji: '👍' };
+
+      mockWishRepo.findOne.mockResolvedValue(wish);
+      mockReactionRepo.findOne.mockResolvedValue(existing);
+      mockReactionRepo.save.mockResolvedValue({});
+
+      await service.upsert(REACTOR_ID, 'w1', { emoji: '❤️' });
+
+      expect(mockNotificationService.notify).not.toHaveBeenCalled();
+    });
+
+    it("n'envoie pas reaction_received si le réacteur est le créateur du souhait", async () => {
+      const OWNER_ID = 'owner-uuid';
+      const wish = { id: 'w1', user_id: OWNER_ID, is_private: false, title: 'Mon souhait' };
+
+      mockWishRepo.findOne.mockResolvedValue(wish);
+      mockReactionRepo.findOne.mockResolvedValue(null);
+      mockReactionRepo.create.mockReturnValue({ user_id: OWNER_ID, wish_id: 'w1', emoji: '❤️' });
+      mockReactionRepo.save.mockResolvedValue({});
+
+      await service.upsert(OWNER_ID, 'w1', { emoji: '❤️' });
+
+      expect(mockNotificationService.notify).not.toHaveBeenCalled();
     });
   });
 
