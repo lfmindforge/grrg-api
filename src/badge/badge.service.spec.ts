@@ -4,11 +4,13 @@ import { BadgeService } from './badge.service';
 import { Badge } from './badge.entity';
 import { Evaluation } from '../donation/evaluation.entity';
 import { BadgeType } from './badge.types';
+import { NotificationService } from '../notifications/notification.service';
 
 describe('BadgeService', () => {
   let service: BadgeService;
   let badgeRepo: { findOne: jest.Mock; create: jest.Mock; save: jest.Mock; find: jest.Mock };
   let evaluationRepo: { createQueryBuilder: jest.Mock };
+  let notificationService: { notify: jest.Mock };
   let mockQb: {
     innerJoin: jest.Mock;
     select: jest.Mock;
@@ -40,12 +42,14 @@ describe('BadgeService', () => {
       find: jest.fn(),
     };
     evaluationRepo = { createQueryBuilder: jest.fn().mockReturnValue(mockQb) };
+    notificationService = { notify: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BadgeService,
         { provide: getRepositoryToken(Badge), useValue: badgeRepo },
         { provide: getRepositoryToken(Evaluation), useValue: evaluationRepo },
+        { provide: NotificationService, useValue: notificationService },
       ],
     }).compile();
 
@@ -88,6 +92,29 @@ describe('BadgeService', () => {
       expect(badgeRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'existing', count: 2 }),
       );
+    });
+
+    it('envoie badge_earned au premier obtention du badge', async () => {
+      badgeRepo.findOne.mockResolvedValue(null);
+      badgeRepo.create.mockReturnValue({ user_id: USER_ID, badge_type: 'fastest_donor', count: 1 });
+      badgeRepo.save.mockResolvedValue({});
+
+      await service.award(USER_ID, BadgeType.FASTEST_DONOR);
+
+      expect(notificationService.notify).toHaveBeenCalledWith(
+        USER_ID,
+        'badge_earned',
+        { badge_type: 'fastest_donor' },
+      );
+    });
+
+    it("n'envoie pas badge_earned si le badge existe déjà (incrément count)", async () => {
+      badgeRepo.findOne.mockResolvedValue({ user_id: USER_ID, badge_type: 'fastest_donor', count: 1 });
+      badgeRepo.save.mockResolvedValue({});
+
+      await service.award(USER_ID, BadgeType.FASTEST_DONOR);
+
+      expect(notificationService.notify).not.toHaveBeenCalled();
     });
   });
 

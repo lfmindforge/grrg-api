@@ -5,6 +5,8 @@ import { Cron } from '@nestjs/schedule';
 import { Badge } from './badge.entity';
 import { Evaluation } from '../donation/evaluation.entity';
 import { BadgeType, BadgeDto } from './badge.types';
+import { NotificationService } from '../notifications/notification.service';
+import { NotificationType } from '../notifications/notification.types';
 
 @Injectable()
 export class BadgeService {
@@ -13,6 +15,7 @@ export class BadgeService {
     private readonly badgeRepo: Repository<Badge>,
     @InjectRepository(Evaluation)
     private readonly evaluationRepo: Repository<Evaluation>,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async award(userId: string, type: BadgeType, period?: string): Promise<void> {
@@ -26,6 +29,9 @@ export class BadgeService {
     await this.badgeRepo.save(
       this.badgeRepo.create({ user_id: userId, badge_type: type, period: period ?? null, count: 1 }),
     );
+    await this.notificationService.notify(userId, NotificationType.BADGE_EARNED, {
+      badge_type: type,
+    });
   }
 
   findByUser(userId: string): Promise<Badge[]> {
