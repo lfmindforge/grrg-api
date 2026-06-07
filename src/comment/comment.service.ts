@@ -6,6 +6,8 @@ import { Wish } from '../wish/wish.entity';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { QueryCommentsDto } from './dto/query-comments.dto';
 import { CommentResponseDto, PaginatedCommentsDto } from './comment.types';
+import { NotificationService } from '../notifications/notification.service';
+import { NotificationType, truncateTitle } from '../notifications/notification.types';
 
 @Injectable()
 export class CommentService {
@@ -14,6 +16,7 @@ export class CommentService {
     private readonly commentRepo: Repository<Comment>,
     @InjectRepository(Wish)
     private readonly wishRepo: Repository<Wish>,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async getComments(wishId: string, dto: QueryCommentsDto): Promise<PaginatedCommentsDto> {
@@ -57,7 +60,15 @@ export class CommentService {
       relations: ['user'],
     });
 
-    // TODO US-020 : notifier le créateur du souhait via NotificationService
+    if (wish.user_id !== userId) {
+      await this.notificationService.notify(wish.user_id, NotificationType.COMMENT_RECEIVED, {
+        commenter_pseudo: full!.user.pseudo,
+        wish_title: truncateTitle(wish.title),
+        wish_id: wish.id,
+        comment_id: full!.id,
+      });
+    }
+
     return this.toDto(full!);
   }
 
