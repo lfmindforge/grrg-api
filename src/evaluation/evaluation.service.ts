@@ -18,6 +18,7 @@ import { SupabaseStorageService } from '../common/storage/supabase-storage.servi
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import { GlowService } from '../common/glow.service';
 import { NotificationService } from '../notifications/notification.service';
+import { NotificationType } from '../notifications/notification.types';
 import { BadgeService } from '../badge/badge.service';
 import { BadgeType } from '../badge/badge.types';
 
@@ -114,17 +115,20 @@ export class EvaluationService {
     donation.wish.status = WishStatus.FULFILLED;
     await this.wishRepo.save(donation.wish);
 
-    const notificationType =
-      newGrade !== previousGrade ? 'grade_up' : 'evaluation_received';
-    const progression = this.glowService.getGradeProgression(count);
-    await this.notificationService.create(donation.donor_id, notificationType, {
-      glowAwarded: glow_awarded,
-      totalGlowPoints: donor!.glow_points,
-      currentGrade: newGrade,
-      nextGrade: progression.nextGrade,
-      donsManquants: progression.donsManquants,
+    const wishOwner = await this.userRepo.findOne({ where: { id: donation.wish.user_id } });
+
+    await this.notificationService.notify(donation.donor_id, NotificationType.EVALUATION_RECEIVED, {
+      glow_awarded,
+      recipient_pseudo: wishOwner!.pseudo,
+      wish_id: donation.wish.id,
     });
-    // TODO US-020 — NotificationService.pushSSE(donation.donor_id, notification)
+
+    if (newGrade !== previousGrade) {
+      await this.notificationService.notify(donation.donor_id, NotificationType.GRADE_UP, {
+        grade: newGrade,
+        previous_grade: previousGrade,
+      });
+    }
 
     if (donation.is_anonymous) {
       await this.badgeService.award(donation.donor_id, BadgeType.MYSTERY_ANONYMOUS);

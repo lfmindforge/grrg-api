@@ -43,7 +43,7 @@ describe('EvaluationService', () => {
     computeGrade: jest.Mock;
     getGradeProgression: jest.Mock;
   };
-  let notificationService: { create: jest.Mock };
+  let notificationService: { notify: jest.Mock };
   let badgeService: { award: jest.Mock };
 
   const RECEIVER_ID = 'receiver-uuid';
@@ -114,7 +114,7 @@ describe('EvaluationService', () => {
         donsManquants: 4,
       }),
     };
-    notificationService = { create: jest.fn().mockResolvedValue({}) };
+    notificationService = { notify: jest.fn().mockResolvedValue(undefined) };
     badgeService = { award: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -180,66 +180,68 @@ describe('EvaluationService', () => {
       expect(result.glow_awarded).toBe(30);
     });
 
-    it('crée une notification evaluation_received quand le grade ne change pas', async () => {
-      donationRepo.findOne.mockResolvedValue(mockDonation); // donor.grade = 'etincelle'
-      evaluationRepo.findOne.mockResolvedValue(null);
-      config.getOrThrow.mockReturnValue('evaluations-proof');
-      supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
-      evaluationRepo.create.mockReturnValue(mockEvaluation);
-      evaluationRepo.save.mockResolvedValue(mockEvaluation);
-      userRepo.findOne.mockResolvedValue({ ...mockDonor }); // grade: 'etincelle'
-      evaluationRepo.count.mockResolvedValue(1);
-      glowService.computeGrade.mockReturnValue('etincelle'); // même grade → pas de montée
-      userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
-      wishRepo.save.mockResolvedValue({});
-
-      await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
-
-      expect(notificationService.create).toHaveBeenCalledWith(
-        DONOR_ID,
-        'evaluation_received',
-        expect.objectContaining({ glowAwarded: 30, currentGrade: 'etincelle' }),
-      );
-    });
-
-    it('crée une notification grade_up quand le grade change', async () => {
-      const donorAtEtincelle = {
-        ...mockDonor,
-        grade: 'etincelle',
-        glow_points: 80,
-      };
+    it('envoie evaluation_received au donateur avec glow_awarded et pseudo du receveur', async () => {
       donationRepo.findOne.mockResolvedValue(mockDonation);
       evaluationRepo.findOne.mockResolvedValue(null);
       config.getOrThrow.mockReturnValue('evaluations-proof');
       supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
       evaluationRepo.create.mockReturnValue(mockEvaluation);
       evaluationRepo.save.mockResolvedValue(mockEvaluation);
-      userRepo.findOne.mockResolvedValue({ ...donorAtEtincelle });
-      evaluationRepo.count.mockResolvedValue(5); // 5ème don → lumiere
-      glowService.computeGrade.mockReturnValue('lumiere'); // nouveau grade
-      glowService.getGradeProgression.mockReturnValue({
-        currentGrade: 'lumiere',
-        nextGrade: 'eclat',
-        donsManquants: 15,
-      });
-      userRepo.save.mockResolvedValue({
-        ...donorAtEtincelle,
-        glow_points: 110,
-        grade: 'lumiere',
-      });
+      userRepo.findOne.mockResolvedValue({ ...mockDonor, pseudo: 'Receiver' });
+      evaluationRepo.count.mockResolvedValue(1);
+      glowService.computeGrade.mockReturnValue('etincelle');
+      userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
       wishRepo.save.mockResolvedValue({});
 
       await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
 
-      expect(notificationService.create).toHaveBeenCalledWith(
+      expect(notificationService.notify).toHaveBeenCalledWith(
+        DONOR_ID,
+        'evaluation_received',
+        expect.objectContaining({ glow_awarded: 30, recipient_pseudo: 'Receiver', wish_id: WISH_ID }),
+      );
+    });
+
+    it('envoie grade_up en plus de evaluation_received si le grade change', async () => {
+      const donorAtEtincelle = { ...mockDonor, grade: 'etincelle', glow_points: 80 };
+      donationRepo.findOne.mockResolvedValue(mockDonation);
+      evaluationRepo.findOne.mockResolvedValue(null);
+      config.getOrThrow.mockReturnValue('evaluations-proof');
+      supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
+      evaluationRepo.create.mockReturnValue(mockEvaluation);
+      evaluationRepo.save.mockResolvedValue(mockEvaluation);
+      userRepo.findOne.mockResolvedValue({ ...donorAtEtincelle, pseudo: 'Receiver' });
+      evaluationRepo.count.mockResolvedValue(5);
+      glowService.computeGrade.mockReturnValue('lumiere');
+      userRepo.save.mockResolvedValue({ ...donorAtEtincelle, glow_points: 110, grade: 'lumiere' });
+      wishRepo.save.mockResolvedValue({});
+
+      await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
+
+      expect(notificationService.notify).toHaveBeenCalledWith(
         DONOR_ID,
         'grade_up',
-        expect.objectContaining({
-          currentGrade: 'lumiere',
-          nextGrade: 'eclat',
-          donsManquants: 15,
-        }),
+        expect.objectContaining({ grade: 'lumiere', previous_grade: 'etincelle' }),
       );
+    });
+
+    it("n'envoie pas grade_up si le grade n'a pas changé", async () => {
+      donationRepo.findOne.mockResolvedValue(mockDonation);
+      evaluationRepo.findOne.mockResolvedValue(null);
+      config.getOrThrow.mockReturnValue('evaluations-proof');
+      supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
+      evaluationRepo.create.mockReturnValue(mockEvaluation);
+      evaluationRepo.save.mockResolvedValue(mockEvaluation);
+      userRepo.findOne.mockResolvedValue({ ...mockDonor, pseudo: 'Receiver' });
+      evaluationRepo.count.mockResolvedValue(1);
+      glowService.computeGrade.mockReturnValue('etincelle'); // même grade
+      userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
+      wishRepo.save.mockResolvedValue({});
+
+      await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
+
+      const gradeCalls = notificationService.notify.mock.calls.filter((c: unknown[]) => c[1] === 'grade_up');
+      expect(gradeCalls).toHaveLength(0);
     });
 
     it('lève NotFoundException si la donation est introuvable', async () => {
@@ -317,7 +319,7 @@ describe('EvaluationService', () => {
       evaluationRepo.count.mockResolvedValue(1);
       userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
       wishRepo.save.mockResolvedValue({});
-      notificationService.create.mockResolvedValue({});
+      notificationService.notify.mockResolvedValue(undefined);
     });
 
     it('attribue mystery_anonymous si le don est anonyme', async () => {
