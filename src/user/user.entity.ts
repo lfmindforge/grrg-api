@@ -37,6 +37,9 @@ export class User {
   @Column({ length: 30, default: 'etincelle' })
   grade!: string;
 
+  @Column({ type: 'varchar', length: 10, default: 'user' })
+  role!: 'user' | 'admin';
+
   @CreateDateColumn()
   created_at!: Date;
 }
