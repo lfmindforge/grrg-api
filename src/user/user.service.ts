@@ -5,11 +5,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
+import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { User } from './user.entity';
 import { Wish } from '../wish/wish.entity';
 import { Donation } from '../donation/donation.entity';
 import { Follow } from '../follow/follow.entity';
+import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import {
   CreateUserData,
   UserPublicProfileDto,
@@ -19,6 +21,7 @@ import { WishStatus } from '../wish/wish.types';
 import { DonationStatus } from '../donation/donation.types';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UserExportDto } from './dto/user-export.dto';
 import { BadgeService } from '../badge/badge.service';
 
 @Injectable()
@@ -28,6 +31,7 @@ export class UserService {
     @InjectRepository(Wish) private readonly wishRepo: Repository<Wish>,
     @InjectRepository(Donation) private readonly donationRepo: Repository<Donation>,
     @InjectRepository(Follow) private readonly followRepo: Repository<Follow>,
+    @InjectRepository(RefreshToken) private readonly refreshTokenRepo: Repository<RefreshToken>,
     private readonly supabaseStorage: SupabaseStorageService,
     private readonly config: ConfigService,
     private readonly badgeService: BadgeService,
@@ -120,5 +124,55 @@ export class UserService {
 
     await this.userRepo.save(user!);
     return this.getProfile(userId);
+  }
+
+  async deleteMe(userId: string): Promise<void> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+
+    if (user!.avatar_url) {
+      const bucket = this.config.getOrThrow<string>('SUPABASE_BUCKET_AVATARS');
+      const path = this.supabaseStorage.extractPath(bucket, user!.avatar_url);
+      if (path) await this.supabaseStorage.delete(bucket, [path]);
+    }
+
+    user!.email = `deleted_${randomUUID()}@anon.grrg`;
+    user!.pseudo = 'utilisateur_supprimé';
+    user!.avatar_url = null;
+    user!.password_hash = null;
+    user!.oauth_id = null;
+
+    await this.refreshTokenRepo.delete({ user_id: userId });
+
+    // softRemove pose deleted_at et sauvegarde l'anonymisation en une seule opération
+    await this.userRepo.softRemove(user!);
+  }
+
+  async exportMe(userId: string): Promise<UserExportDto> {
+    const [user, wishes, donationsMade, donationsReceived] = await Promise.all([
+      this.userRepo.findOne({ where: { id: userId } }),
+      this.wishRepo.find({ where: { user_id: userId }, withDeleted: true }),
+      this.donationRepo.find({ where: { donor_id: userId }, withDeleted: true }),
+      this.donationRepo
+        .createQueryBuilder('d')
+        .innerJoin('wishes', 'w', 'w.id = d.wish_id')
+        .where('w.user_id = :userId', { userId })
+        .withDeleted()
+        .getMany(),
+    ]);
+
+    return {
+      profile: {
+        id: user!.id,
+        email: user!.email,
+        pseudo: user!.pseudo,
+        birthdate: user!.birthdate,
+        grade: user!.grade,
+        glow_points: user!.glow_points,
+        created_at: user!.created_at,
+      },
+      wishes,
+      donations_made: donationsMade,
+      donations_received: donationsReceived,
+    };
   }
 }

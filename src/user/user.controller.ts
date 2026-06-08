@@ -2,6 +2,9 @@ import {
   Controller,
   Get,
   Put,
+  Delete,
+  HttpCode,
+  HttpStatus,
   Param,
   Body,
   Req,
@@ -15,6 +18,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { UserService } from './user.service';
 import { FollowService } from '../follow/follow.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UserExportDto } from './dto/user-export.dto';
 import { UserPublicProfileDto } from './user.types';
 import { SuggestionDto } from '../follow/follow.types';
 
@@ -24,6 +28,17 @@ export class UserController {
     private readonly userService: UserService,
     private readonly followService: FollowService,
   ) {}
+
+  @Delete('me')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteMe(@Req() req: { user: { id: string } }): Promise<void> {
+    return this.userService.deleteMe(req.user.id);
+  }
+
+  @Get('me/export')
+  exportMe(@Req() req: { user: { id: string } }): Promise<UserExportDto> {
+    return this.userService.exportMe(req.user.id);
+  }
 
   @Get('suggestions')
   getSuggestions(
