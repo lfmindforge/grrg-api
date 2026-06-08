@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -42,5 +43,8 @@ export class User {
 
   @CreateDateColumn()
   created_at!: Date;
+
+  @DeleteDateColumn()
+  deleted_at!: Date | null;
 }
 // "!" promet une valeur car c'est au runtime que l'hydratation se fait par TypeOrm et non par le constructeur.

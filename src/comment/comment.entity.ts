@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { User } from '../user/user.entity';
 import { Wish } from '../wish/wish.entity';
 
@@ -29,4 +29,7 @@ export class Comment {
 
   @CreateDateColumn()
   created_at!: Date;
+
+  @DeleteDateColumn()
+  deleted_at!: Date | null;
 }

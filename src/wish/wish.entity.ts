@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
@@ -46,4 +47,7 @@ export class Wish {
 
   @UpdateDateColumn()
   updated_at!: Date;
+
+  @DeleteDateColumn()
+  deleted_at!: Date | null;
 }

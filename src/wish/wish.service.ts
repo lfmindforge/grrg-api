@@ -200,7 +200,7 @@ export class WishService {
       if (paths.length) await this.supabaseStorage.delete(bucket, paths);
     }
     wish.status = WishStatus.CANCELLED;
-    await this.wishRepo.save(wish);
+    await this.wishRepo.softRemove(wish);
   }
 
   async findCategories(): Promise<string[]> {

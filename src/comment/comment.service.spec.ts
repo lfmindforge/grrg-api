@@ -20,7 +20,7 @@ const mockCommentRepo = {
   findOne: jest.fn(),
   create: jest.fn(),
   save: jest.fn(),
-  remove: jest.fn(),
+  softRemove: jest.fn(),
 };
 
 const mockWishRepo = {
@@ -184,11 +184,11 @@ describe('CommentService', () => {
     it("supprime le commentaire si l'utilisateur en est l'auteur", async () => {
       const comment = { id: 'c-1', user_id: 'u-1', content: 'test' };
       mockCommentRepo.findOne.mockResolvedValue(comment);
-      mockCommentRepo.remove.mockResolvedValue(undefined);
+      mockCommentRepo.softRemove.mockResolvedValue(undefined);
 
       await service.deleteComment('u-1', 'c-1');
 
-      expect(mockCommentRepo.remove).toHaveBeenCalledWith(comment);
+      expect(mockCommentRepo.softRemove).toHaveBeenCalledWith(comment);
     });
 
     it('lève NotFoundException si le commentaire est introuvable', async () => {
@@ -201,7 +201,7 @@ describe('CommentService', () => {
       mockCommentRepo.findOne.mockResolvedValue({ id: 'c-1', user_id: 'u-other' });
 
       await expect(service.deleteComment('u-1', 'c-1')).rejects.toThrow(ForbiddenException);
-      expect(mockCommentRepo.remove).not.toHaveBeenCalled();
+      expect(mockCommentRepo.softRemove).not.toHaveBeenCalled();
     });
   });
 

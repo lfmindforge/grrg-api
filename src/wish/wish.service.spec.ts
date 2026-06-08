@@ -19,6 +19,7 @@ describe('WishService', () => {
   let wishRepo: {
     create: jest.Mock;
     save: jest.Mock;
+    softRemove: jest.Mock;
     findOne: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
@@ -60,6 +61,7 @@ describe('WishService', () => {
     wishRepo = {
       create: jest.fn(),
       save: jest.fn(),
+      softRemove: jest.fn(),
       findOne: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(mockQb),
     };
@@ -544,26 +546,23 @@ describe('WishService', () => {
       );
     });
 
-    it('passe status = CANCELLED et sauvegarde', async () => {
+    it('passe status = CANCELLED et soft-supprime', async () => {
       const wish = {
         id: 'uuid-1',
         user_id: 'user-id',
         status: WishStatus.PENDING,
       };
       wishRepo.findOne.mockResolvedValue(wish);
-      wishRepo.save.mockResolvedValue({
-        ...wish,
-        status: WishStatus.CANCELLED,
-      });
+      wishRepo.softRemove.mockResolvedValue({});
 
       await service.softDelete('uuid-1', 'user-id');
 
-      expect(wishRepo.save).toHaveBeenCalledWith(
+      expect(wishRepo.softRemove).toHaveBeenCalledWith(
         expect.objectContaining({ status: WishStatus.CANCELLED }),
       );
     });
 
-    it('idempotent — si déjà CANCELLED, ne rappelle pas save()', async () => {
+    it('idempotent — si déjà CANCELLED, ne rappelle pas softRemove()', async () => {
       wishRepo.findOne.mockResolvedValue({
         id: 'uuid-1',
         user_id: 'user-id',
@@ -573,7 +572,7 @@ describe('WishService', () => {
 
       await service.softDelete('uuid-1', 'user-id');
 
-      expect(wishRepo.save).not.toHaveBeenCalled();
+      expect(wishRepo.softRemove).not.toHaveBeenCalled();
       expect(supabaseStorage.delete).not.toHaveBeenCalled();
     });
 
@@ -586,13 +585,13 @@ describe('WishService', () => {
         media_urls: [mediaUrl],
       });
       supabaseStorage.extractPath.mockReturnValue('user-id/photo.jpg');
-      wishRepo.save.mockResolvedValue({});
+      wishRepo.softRemove.mockResolvedValue({});
 
       await service.softDelete('uuid-1', 'user-id');
 
       expect(supabaseStorage.extractPath).toHaveBeenCalledWith('wishes-media', mediaUrl);
       expect(supabaseStorage.delete).toHaveBeenCalledWith('wishes-media', ['user-id/photo.jpg']);
-      expect(wishRepo.save).toHaveBeenCalledWith(
+      expect(wishRepo.softRemove).toHaveBeenCalledWith(
         expect.objectContaining({ status: WishStatus.CANCELLED }),
       );
     });
@@ -604,12 +603,12 @@ describe('WishService', () => {
         status: WishStatus.PENDING,
         media_urls: [],
       });
-      wishRepo.save.mockResolvedValue({});
+      wishRepo.softRemove.mockResolvedValue({});
 
       await service.softDelete('uuid-1', 'user-id');
 
       expect(supabaseStorage.delete).not.toHaveBeenCalled();
-      expect(wishRepo.save).toHaveBeenCalledWith(
+      expect(wishRepo.softRemove).toHaveBeenCalledWith(
         expect.objectContaining({ status: WishStatus.CANCELLED }),
       );
     });
