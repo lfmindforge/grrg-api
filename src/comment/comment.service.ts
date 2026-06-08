@@ -76,7 +76,7 @@ export class CommentService {
     const comment = await this.commentRepo.findOne({ where: { id: commentId } });
     if (!comment) throw new NotFoundException('Commentaire introuvable');
     if (comment.user_id !== userId) throw new ForbiddenException('Accès refusé');
-    await this.commentRepo.remove(comment);
+    await this.commentRepo.softRemove(comment);
   }
 
   async reportComment(userId: string, commentId: string): Promise<void> {
