@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   JoinColumn,
   OneToOne,
@@ -43,4 +44,7 @@ export class Evaluation {
 
   @CreateDateColumn()
   created_at!: Date;
+
+  @DeleteDateColumn()
+  deleted_at!: Date | null;
 }

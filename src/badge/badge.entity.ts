@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -24,4 +25,7 @@ export class Badge {
 
   @CreateDateColumn()
   earned_at!: Date;
+
+  @DeleteDateColumn()
+  deleted_at!: Date | null;
 }
