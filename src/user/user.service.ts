@@ -33,6 +33,10 @@ export class UserService {
     private readonly badgeService: BadgeService,
   ) {}
 
+  findById(id: string): Promise<User | null> {
+    return this.userRepo.findOne({ where: { id } });
+  }
+
   findByEmail(email: string): Promise<User | null> {
     return this.userRepo.findOne({ where: { email } });
   }

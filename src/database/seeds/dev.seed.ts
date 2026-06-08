@@ -9,6 +9,8 @@ async function seed() {
   const userRepo = dataSource.getRepository(User);
   const hash = await bcrypt.hash('password123', 10);
 
+  const adminHash = await bcrypt.hash('admin1234', 10);
+
   const users: DeepPartial<User>[] = [
     {
       email: 'luc@test.com',
@@ -23,6 +25,14 @@ async function seed() {
       password_hash: hash,
       birthdate: new Date('1992-06-15'),
       grade: 'etincelle',
+    },
+    {
+      email: 'admin@grrg.dev',
+      pseudo: 'admin',
+      password_hash: adminHash,
+      birthdate: new Date('1990-01-01'),
+      grade: 'legende',
+      role: 'admin',
     },
   ];
 

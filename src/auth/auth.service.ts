@@ -72,7 +72,7 @@ export class AuthService {
     const valid = await bcrypt.compare(dto.password, user.password_hash);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
-    return this.generateTokens(user.id, user.email);
+    return this.generateTokens(user.id, user.email, user.role);
   }
 
   async refresh(
@@ -95,7 +95,11 @@ export class AuthService {
 
     // Rotation: révoque l'ancien jti, émet deux nouveaux tokens
     await this.refreshTokenRepo.delete({ id: payload.jti });
-    return this.generateTokens(payload.sub, payload.email);
+
+    // Aller DB pour récupérer le rôle courant — garantit qu'un changement de rôle prend effet au prochain refresh
+    const user = await this.userService.findById(payload.sub);
+    if (!user) throw new UnauthorizedException('User not found');
+    return this.generateTokens(user.id, user.email, user.role);
   }
 
   /**  La colonne est stockée en DB mais lors du refresh(), seul findOne({ id: jti }) est vérifié. L'expiration est déjà
@@ -132,7 +136,7 @@ export class AuthService {
       profile.provider,
       profile.oauthId,
     );
-    if (existing) return this.generateTokens(existing.id, existing.email);
+    if (existing) return this.generateTokens(existing.id, existing.email, existing.role);
 
     // Cas 2 : email déjà utilisé par un compte email/mot de passe
     const byEmail = await this.userService.findByEmail(email);
@@ -152,7 +156,7 @@ export class AuthService {
       oauth_provider: profile.provider,
       oauth_id: profile.oauthId,
     });
-    return this.generateTokens(user.id, user.email);
+    return this.generateTokens(user.id, user.email, user.role);
   }
 
   // Génère un pseudo depuis le displayName OAuth avec suffixe hex pour garantir l'unicité
@@ -171,6 +175,7 @@ export class AuthService {
   private async generateTokens(
     userId: string,
     email: string,
+    role: string,
   ): Promise<{ access_token: string; refresh_token: string }> {
     const jti = randomUUID();
     const expiresAt = new Date(
@@ -180,7 +185,7 @@ export class AuthService {
 
     const [access_token, refresh_token] = await Promise.all([
       this.jwtService.signAsync(
-        { sub: userId, email },
+        { sub: userId, email, role },
         {
           secret: this.config.getOrThrow<string>('JWT_SECRET'),
           expiresIn: this.config.getOrThrow<StringValue>(

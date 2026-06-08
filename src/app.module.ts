@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 import { WishModule } from './wish/wish.module';
 import { DonationModule } from './donation/donation.module';
 import { EvaluationModule } from './evaluation/evaluation.module';
@@ -66,6 +67,8 @@ import KeyvRedis from '@keyv/redis';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     //Application JwtAuthGuard sur toutes les routes — les routes @Public() sont exemptées
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // RolesGuard après JwtAuthGuard — req.user doit être peuplé avant le check de rôle
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}

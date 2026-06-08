@@ -20,6 +20,7 @@ describe('AuthService', () => {
   const mockUserService = {
     findByEmail: jest.fn(),
     findByPseudo: jest.fn(),
+    findById: jest.fn(),
     create: jest.fn(),
     findByOAuthId: jest.fn(),
   };
@@ -170,6 +171,11 @@ describe('AuthService', () => {
       });
       mockRefreshTokenRepo.findOne.mockResolvedValue({ id: 'old-jti' });
       mockRefreshTokenRepo.delete.mockResolvedValue({});
+      mockUserService.findById.mockResolvedValue({
+        id: 'user-id',
+        email: 'test@example.com',
+        role: 'user',
+      });
       mockJwtService.signAsync
         .mockResolvedValueOnce('new-access')
         .mockResolvedValueOnce('new-refresh');
@@ -240,6 +246,7 @@ describe('AuthService', () => {
       mockUserService.findByOAuthId.mockResolvedValue({
         id: 'user-id',
         email: 'oauth@example.com',
+        role: 'user',
       });
       mockJwtService.signAsync
         .mockResolvedValueOnce('access-token')
