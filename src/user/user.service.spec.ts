@@ -6,6 +6,7 @@ import { User } from './user.entity';
 import { Wish } from '../wish/wish.entity';
 import { Donation } from '../donation/donation.entity';
 import { Follow } from '../follow/follow.entity';
+import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { UserService } from './user.service';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { WishStatus } from '../wish/wish.types';
@@ -15,6 +16,7 @@ const mockUserRepo = {
   findOne: jest.fn(),
   create: jest.fn(),
   save: jest.fn(),
+  softRemove: jest.fn(),
 };
 
 const mockWishRepo = {
@@ -23,6 +25,12 @@ const mockWishRepo = {
 
 const mockDonationRepo = {
   count: jest.fn(),
+  find: jest.fn(),
+  createQueryBuilder: jest.fn(),
+};
+
+const mockRefreshTokenRepo = {
+  delete: jest.fn(),
 };
 
 const mockFollowRepo = {
@@ -51,6 +59,7 @@ describe('UserService', () => {
         { provide: getRepositoryToken(Wish), useValue: mockWishRepo },
         { provide: getRepositoryToken(Donation), useValue: mockDonationRepo },
         { provide: getRepositoryToken(Follow), useValue: mockFollowRepo },
+        { provide: getRepositoryToken(RefreshToken), useValue: mockRefreshTokenRepo },
         { provide: SupabaseStorageService, useValue: mockStorage },
         { provide: ConfigService, useValue: { getOrThrow: () => 'avatars' } },
         { provide: BadgeService, useValue: mockBadgeService },
@@ -436,6 +445,116 @@ describe('UserService', () => {
 
       expect(mockUserRepo.save).toHaveBeenCalled();
       expect(result.pseudo).toBe('alice');
+    });
+  });
+
+  // --- deleteMe() ---
+
+  describe('deleteMe()', () => {
+    const baseUser: Partial<User> = {
+      id: 'user-id',
+      email: 'alice@test.com',
+      pseudo: 'alice',
+      avatar_url: null,
+      password_hash: 'hashed',
+      oauth_id: null,
+    };
+
+    beforeEach(() => {
+      mockUserRepo.softRemove.mockResolvedValue(undefined);
+      mockRefreshTokenRepo.delete.mockResolvedValue(undefined);
+    });
+
+    it('anonymise les PII et appelle softRemove', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ ...baseUser });
+
+      await service.deleteMe('user-id');
+
+      expect(mockUserRepo.softRemove).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pseudo: 'utilisateur_supprimé',
+          avatar_url: null,
+          password_hash: null,
+          oauth_id: null,
+        }),
+      );
+      const saved = mockUserRepo.softRemove.mock.calls[0][0] as User;
+      expect(saved.email).toMatch(/^deleted_.+@anon\.grrg$/);
+    });
+
+    it('révoque tous les refresh tokens', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ ...baseUser });
+
+      await service.deleteMe('user-id');
+
+      expect(mockRefreshTokenRepo.delete).toHaveBeenCalledWith({ user_id: 'user-id' });
+    });
+
+    it('supprime l\'avatar Supabase si avatar_url présent', async () => {
+      mockUserRepo.findOne.mockResolvedValue({
+        ...baseUser,
+        avatar_url: 'https://cdn.example.com/avatars/user-id/avatar.jpg',
+      });
+      mockStorage.extractPath.mockReturnValue('user-id/avatar.jpg');
+
+      await service.deleteMe('user-id');
+
+      expect(mockStorage.delete).toHaveBeenCalledWith('avatars', ['user-id/avatar.jpg']);
+    });
+
+    it('ne tente pas de supprimer Supabase si avatar_url est null', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ ...baseUser, avatar_url: null });
+      mockStorage.delete.mockClear();
+
+      await service.deleteMe('user-id');
+
+      expect(mockStorage.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- exportMe() ---
+
+  describe('exportMe()', () => {
+    it('retourne profile + wishes + donations_made + donations_received', async () => {
+      const user: Partial<User> = {
+        id: 'user-id',
+        email: 'alice@test.com',
+        pseudo: 'alice',
+        birthdate: null,
+        grade: 'etincelle',
+        glow_points: 10,
+        created_at: new Date('2025-01-01'),
+      };
+      const wishes = [{ id: 'wish-1', title: 'Wish 1' }];
+      const donationsMade = [{ id: 'don-1' }];
+      const donationsReceived = [{ id: 'don-2' }];
+
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockWishRepo.find.mockResolvedValue(wishes);
+      mockDonationRepo.find.mockResolvedValue(donationsMade);
+
+      const mockQb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        withDeleted: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue(donationsReceived),
+      };
+      mockDonationRepo.createQueryBuilder.mockReturnValue(mockQb);
+
+      const result = await service.exportMe('user-id');
+
+      expect(result.profile).toEqual({
+        id: 'user-id',
+        email: 'alice@test.com',
+        pseudo: 'alice',
+        birthdate: null,
+        grade: 'etincelle',
+        glow_points: 10,
+        created_at: user.created_at,
+      });
+      expect(result.wishes).toEqual(wishes);
+      expect(result.donations_made).toEqual(donationsMade);
+      expect(result.donations_received).toEqual(donationsReceived);
     });
   });
 });
