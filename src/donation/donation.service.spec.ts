@@ -15,6 +15,8 @@ import { CreateDonationDto } from './dto/create-donation.dto';
 import { BadgeService } from '../badge/badge.service';
 import { BadgeType } from '../badge/badge.types';
 import { NotificationService } from '../notifications/notification.service';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 describe('DonationService', () => {
   let service: DonationService;
@@ -30,6 +32,7 @@ describe('DonationService', () => {
   let userRepo: { findOne: jest.Mock };
   let badgeService: { award: jest.Mock };
   let notificationService: { notify: jest.Mock };
+  let mockEventService: { log: jest.Mock };
 
   let mockQb: {
     innerJoinAndSelect: jest.Mock;
@@ -71,6 +74,7 @@ describe('DonationService', () => {
     userRepo = { findOne: jest.fn().mockResolvedValue({ pseudo: 'DonorPseudo' }) };
     badgeService = { award: jest.fn().mockResolvedValue(undefined) };
     notificationService = { notify: jest.fn().mockResolvedValue(undefined) };
+    mockEventService = { log: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -80,6 +84,7 @@ describe('DonationService', () => {
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: BadgeService, useValue: badgeService },
         { provide: NotificationService, useValue: notificationService },
+        { provide: EventLogService, useValue: mockEventService },
       ],
     }).compile();
 
@@ -517,6 +522,41 @@ describe('DonationService', () => {
       const result = await service.findReceived(OWNER_ID);
 
       expect(result).toEqual([]);
+    });
+  });
+
+  // --- événements ---
+
+  describe('événements EventLog', () => {
+    it('log DONATION_CREATE après la sauvegarde', async () => {
+      const dto: CreateDonationDto = { wish_id: WISH_ID, type: DonationType.FINANCIAL, amount: 50, is_anonymous: false };
+      const created = { id: 'don-uuid', ...dto, donor_id: DONOR_ID, status: DonationStatus.PENDING, is_anonymous: false };
+      wishRepo.findOne.mockResolvedValue({ ...mockWish });
+      donationRepo.create.mockReturnValue(created);
+      donationRepo.save.mockResolvedValue(created);
+      wishRepo.save.mockResolvedValue({});
+
+      await service.propose(DONOR_ID, dto);
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.DONATION_CREATE,
+        DONOR_ID,
+        expect.objectContaining({ wish_id: WISH_ID, type: DonationType.FINANCIAL }),
+      );
+    });
+
+    it('log DONATION_CONFIRM après la confirmation', async () => {
+      const donation = { id: 'don-uuid', donor_id: DONOR_ID, status: DonationStatus.PENDING, wish: { id: WISH_ID, user_id: OWNER_ID } };
+      donationRepo.findOne.mockResolvedValue(donation);
+      donationRepo.save.mockResolvedValue({ ...donation, status: DonationStatus.COMPLETED });
+
+      await service.confirm(OWNER_ID, 'don-uuid');
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.DONATION_CONFIRM,
+        OWNER_ID,
+        expect.objectContaining({ donation_id: 'don-uuid', wish_id: WISH_ID }),
+      );
     });
   });
 });

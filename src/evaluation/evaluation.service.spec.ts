@@ -24,6 +24,8 @@ import { GlowService } from '../common/glow.service';
 import { NotificationService } from '../notifications/notification.service';
 import { BadgeService } from '../badge/badge.service';
 import { BadgeType } from '../badge/badge.types';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 describe('EvaluationService', () => {
   let service: EvaluationService;
@@ -45,6 +47,7 @@ describe('EvaluationService', () => {
   };
   let notificationService: { notify: jest.Mock };
   let badgeService: { award: jest.Mock };
+  let mockEventService: { log: jest.Mock };
 
   const RECEIVER_ID = 'receiver-uuid';
   const DONOR_ID = 'donor-uuid';
@@ -116,6 +119,7 @@ describe('EvaluationService', () => {
     };
     notificationService = { notify: jest.fn().mockResolvedValue(undefined) };
     badgeService = { award: jest.fn().mockResolvedValue(undefined) };
+    mockEventService = { log: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -129,6 +133,7 @@ describe('EvaluationService', () => {
         { provide: GlowService, useValue: glowService },
         { provide: NotificationService, useValue: notificationService },
         { provide: BadgeService, useValue: badgeService },
+        { provide: EventLogService, useValue: mockEventService },
       ],
     }).compile();
 
@@ -368,6 +373,32 @@ describe('EvaluationService', () => {
       await service.evaluate(RECEIVER_ID, DONATION_ID, dto, mockFile);
 
       expect(badgeService.award).not.toHaveBeenCalledWith(DONOR_ID, BadgeType.MOST_IMPROBABLE_WISH);
+    });
+  });
+
+  // --- événements ---
+
+  describe('événements EventLog', () => {
+    it('log EVALUATION_CREATE avec satisfaction et glow_awarded', async () => {
+      const dto: CreateEvaluationDto = { satisfaction: EvaluationSatisfaction.HAPPY, description: 'Super', bonus: EvaluationBonus.ON_TIME };
+      donationRepo.findOne.mockResolvedValue(mockDonation);
+      evaluationRepo.findOne.mockResolvedValue(null);
+      config.getOrThrow.mockReturnValue('evaluations-proof');
+      supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
+      evaluationRepo.create.mockReturnValue(mockEvaluation);
+      evaluationRepo.save.mockResolvedValue(mockEvaluation);
+      userRepo.findOne.mockResolvedValue({ ...mockDonor });
+      evaluationRepo.count.mockResolvedValue(1);
+      userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
+      wishRepo.save.mockResolvedValue({});
+
+      await service.evaluate(RECEIVER_ID, DONATION_ID, dto, mockFile);
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.EVALUATION_CREATE,
+        RECEIVER_ID,
+        expect.objectContaining({ donation_id: DONATION_ID, satisfaction: EvaluationSatisfaction.HAPPY, glow_awarded: 30, wish_id: WISH_ID }),
+      );
     });
   });
 });

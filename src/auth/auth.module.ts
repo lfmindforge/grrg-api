@@ -10,6 +10,7 @@ import { RefreshToken } from './entities/refresh-token.entity';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { GitHubStrategy } from './strategies/github.strategy';
+import { EventLogModule } from '../event-log/event-log.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { GitHubStrategy } from './strategies/github.strategy';
     JwtModule.register({}),
     TypeOrmModule.forFeature([RefreshToken]),
     ConfigModule,
+    EventLogModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, GoogleStrategy, GitHubStrategy],

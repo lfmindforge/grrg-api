@@ -13,6 +13,8 @@ import { PaginatedWishesDto, WishPublicDto } from './dto/wish-response.dto';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { WishStatus } from './wish.types';
 import { UpdateWishDto } from './dto/update-wish.dto';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 @Injectable()
 export class WishService {
@@ -20,6 +22,7 @@ export class WishService {
     @InjectRepository(Wish) private readonly wishRepo: Repository<Wish>,
     private readonly supabaseStorage: SupabaseStorageService,
     private readonly config: ConfigService,
+    private readonly eventService: EventLogService,
   ) {}
 
   async findPublic(query: QueryWishDto): Promise<PaginatedWishesDto> {
@@ -172,6 +175,8 @@ export class WishService {
     const wish = await this.findOwnedWishOrThrow(id, userId);
     Object.assign(wish, dto);
 
+    const updatedFields = Object.keys(dto).filter((k) => (dto as Record<string, unknown>)[k] !== undefined);
+
     if (file && wish.status === WishStatus.PENDING) {
       const bucket = this.config.getOrThrow<string>('SUPABASE_BUCKET_WISHES');
       if (wish.media_urls?.length) {
@@ -184,9 +189,12 @@ export class WishService {
       const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
       const url = await this.supabaseStorage.upload(bucket, path, file);
       wish.media_urls = [url];
+      updatedFields.push('media_urls');
     }
 
-    return this.wishRepo.save(wish);
+    const saved = await this.wishRepo.save(wish);
+    await this.eventService.log(EventType.WISH_UPDATE, userId, { wish_id: id, updated_fields: updatedFields });
+    return saved;
   }
 
   async softDelete(id: string, userId: string): Promise<void> {
@@ -199,6 +207,7 @@ export class WishService {
         .filter((p): p is string => p !== null);
       if (paths.length) await this.supabaseStorage.delete(bucket, paths);
     }
+    await this.eventService.log(EventType.WISH_DELETE, userId, { wish_id: id, title: wish.title });
     wish.status = WishStatus.CANCELLED;
     await this.wishRepo.softRemove(wish);
   }
@@ -250,6 +259,8 @@ export class WishService {
       status: WishStatus.PENDING,
     });
 
-    return this.wishRepo.save(wish);
+    const saved = await this.wishRepo.save(wish);
+    await this.eventService.log(EventType.WISH_CREATE, userId, { title: saved.title, category: saved.category, is_private: saved.is_private });
+    return saved;
   }
 }

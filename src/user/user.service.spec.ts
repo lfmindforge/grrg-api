@@ -11,6 +11,8 @@ import { UserService } from './user.service';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { WishStatus } from '../wish/wish.types';
 import { BadgeService } from '../badge/badge.service';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 const mockUserRepo = {
   findOne: jest.fn(),
@@ -48,6 +50,8 @@ const mockBadgeService = {
   toDto: jest.fn((b: unknown) => b),
 };
 
+const mockEventService = { log: jest.fn().mockResolvedValue(undefined) };
+
 describe('UserService', () => {
   let service: UserService;
 
@@ -63,6 +67,7 @@ describe('UserService', () => {
         { provide: SupabaseStorageService, useValue: mockStorage },
         { provide: ConfigService, useValue: { getOrThrow: () => 'avatars' } },
         { provide: BadgeService, useValue: mockBadgeService },
+        { provide: EventLogService, useValue: mockEventService },
       ],
     }).compile();
 
@@ -446,6 +451,25 @@ describe('UserService', () => {
       expect(mockUserRepo.save).toHaveBeenCalled();
       expect(result.pseudo).toBe('alice');
     });
+
+    it('log user.update après mise à jour réussie', async () => {
+      mockUserRepo.findOne
+        .mockResolvedValueOnce(existingUser)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existingUser);
+      mockUserRepo.save.mockResolvedValue(existingUser);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
+
+      await service.updateMe('user-id', { pseudo: 'nouveau' });
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.USER_UPDATE,
+        'user-id',
+        expect.objectContaining({ updated_fields: ['pseudo'] }),
+      );
+    });
   });
 
   // --- deleteMe() ---
@@ -510,6 +534,18 @@ describe('UserService', () => {
 
       expect(mockStorage.delete).not.toHaveBeenCalled();
     });
+
+    it('log user.delete avec le pseudo réel avant anonymisation', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ ...baseUser });
+
+      await service.deleteMe('user-id');
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.USER_DELETE,
+        'user-id',
+        expect.objectContaining({ pseudo: 'alice' }),
+      );
+    });
   });
 
   // --- exportMe() ---
@@ -555,6 +591,27 @@ describe('UserService', () => {
       expect(result.wishes).toEqual(wishes);
       expect(result.donations_made).toEqual(donationsMade);
       expect(result.donations_received).toEqual(donationsReceived);
+    });
+
+    it('log user.export', async () => {
+      const user: Partial<User> = {
+        id: 'user-id', email: 'alice@test.com', pseudo: 'alice',
+        birthdate: null, grade: 'etincelle', glow_points: 0, created_at: new Date(),
+      };
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.find.mockResolvedValue([]);
+      const mockQb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        withDeleted: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      };
+      mockDonationRepo.createQueryBuilder.mockReturnValue(mockQb);
+
+      await service.exportMe('user-id');
+
+      expect(mockEventService.log).toHaveBeenCalledWith(EventType.USER_EXPORT, 'user-id', {});
     });
   });
 });

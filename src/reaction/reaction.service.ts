@@ -8,6 +8,8 @@ import { UpsertReactionDto } from './dto/upsert-reaction.dto';
 import { MyReactionDto } from './reaction.types';
 import { NotificationService } from '../notifications/notification.service';
 import { NotificationType, truncateTitle } from '../notifications/notification.types';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 @Injectable()
 export class ReactionService {
@@ -16,6 +18,7 @@ export class ReactionService {
     @InjectRepository(Wish) private readonly wishRepo: Repository<Wish>,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     private readonly notificationService: NotificationService,
+    private readonly eventService: EventLogService,
   ) {}
 
   async upsert(userId: string, wishId: string, dto: UpsertReactionDto): Promise<void> {
@@ -26,9 +29,11 @@ export class ReactionService {
     if (existing) {
       existing.emoji = dto.emoji;
       await this.reactionRepo.save(existing);
+      await this.eventService.log(EventType.REACTION_UPSERT, userId, { wish_id: wishId, emoji: dto.emoji, action: 'update' });
     } else {
       const reaction = this.reactionRepo.create({ user_id: userId, wish_id: wishId, emoji: dto.emoji });
       await this.reactionRepo.save(reaction);
+      await this.eventService.log(EventType.REACTION_UPSERT, userId, { wish_id: wishId, emoji: dto.emoji, action: 'create' });
       if (wish.user_id !== userId) {
         const reactor = await this.userRepo.findOne({ where: { id: userId } });
         await this.notificationService.notify(wish.user_id, NotificationType.REACTION_RECEIVED, {
@@ -44,6 +49,7 @@ export class ReactionService {
   async delete(userId: string, wishId: string): Promise<void> {
     const reaction = await this.reactionRepo.findOne({ where: { user_id: userId, wish_id: wishId } });
     if (!reaction) throw new NotFoundException('Réaction introuvable');
+    await this.eventService.log(EventType.REACTION_DELETE, userId, { wish_id: wishId });
     await this.reactionRepo.remove(reaction);
   }
 

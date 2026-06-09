@@ -5,6 +5,8 @@ import { Follow } from './follow.entity';
 import { User } from '../user/user.entity';
 import { FollowService } from './follow.service';
 import { NotificationService } from '../notifications/notification.service';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 const mockDataSource = {
   query: jest.fn(),
@@ -26,6 +28,10 @@ const mockNotificationService = {
   notify: jest.fn().mockResolvedValue(undefined),
 };
 
+const mockEventService = {
+  log: jest.fn().mockResolvedValue(undefined),
+};
+
 describe('FollowService', () => {
   let service: FollowService;
 
@@ -37,6 +43,7 @@ describe('FollowService', () => {
         { provide: getRepositoryToken(User), useValue: mockUserRepo },
         { provide: getDataSourceToken(), useValue: mockDataSource },
         { provide: NotificationService, useValue: mockNotificationService },
+        { provide: EventLogService, useValue: mockEventService },
       ],
     }).compile();
 
@@ -201,6 +208,38 @@ describe('FollowService', () => {
       await service.getSuggestions('user-1');
 
       expect(mockDataSource.query).toHaveBeenCalledWith(expect.any(String), ['user-1']);
+    });
+  });
+
+  // --- événements ---
+
+  describe('événements EventLog', () => {
+    it('log FOLLOW_CREATE après le save', async () => {
+      mockUserRepo.findOne.mockResolvedValueOnce({ id: 'followed-id' }).mockResolvedValueOnce({ id: 'follower-id', pseudo: 'alice' });
+      mockFollowRepo.findOne.mockResolvedValue(null);
+      mockFollowRepo.create.mockReturnValue({});
+      mockFollowRepo.save.mockResolvedValue(undefined);
+
+      await service.follow('follower-id', 'followed-id');
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.FOLLOW_CREATE,
+        'follower-id',
+        expect.objectContaining({ followed_id: 'followed-id' }),
+      );
+    });
+
+    it('log FOLLOW_DELETE avant le remove', async () => {
+      mockFollowRepo.findOne.mockResolvedValue({ follower_id: 'follower-id', followed_id: 'followed-id' });
+      mockFollowRepo.remove.mockResolvedValue(undefined);
+
+      await service.unfollow('follower-id', 'followed-id');
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.FOLLOW_DELETE,
+        'follower-id',
+        expect.objectContaining({ followed_id: 'followed-id' }),
+      );
     });
   });
 });

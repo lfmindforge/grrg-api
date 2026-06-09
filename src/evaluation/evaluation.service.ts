@@ -21,6 +21,8 @@ import { NotificationService } from '../notifications/notification.service';
 import { NotificationType } from '../notifications/notification.types';
 import { BadgeService } from '../badge/badge.service';
 import { BadgeType } from '../badge/badge.types';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 @Injectable()
 export class EvaluationService {
@@ -38,6 +40,7 @@ export class EvaluationService {
     private readonly glowService: GlowService,
     private readonly notificationService: NotificationService,
     private readonly badgeService: BadgeService,
+    private readonly eventService: EventLogService,
   ) {}
 
   async evaluate(
@@ -96,6 +99,8 @@ export class EvaluationService {
         glow_awarded,
       }),
     );
+
+    await this.eventService.log(EventType.EVALUATION_CREATE, userId, { donation_id: donationId, satisfaction: dto.satisfaction, glow_awarded, wish_id: donation.wish.id });
 
     const donor = await this.userRepo.findOne({
       where: { id: donation.donor_id },

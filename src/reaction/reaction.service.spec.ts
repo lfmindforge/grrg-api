@@ -6,6 +6,8 @@ import { Wish } from '../wish/wish.entity';
 import { User } from '../user/user.entity';
 import { ReactionService } from './reaction.service';
 import { NotificationService } from '../notifications/notification.service';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 const mockReactionRepo = {
   findOne: jest.fn(),
@@ -26,6 +28,10 @@ const mockNotificationService = {
   notify: jest.fn().mockResolvedValue(undefined),
 };
 
+const mockEventService = {
+  log: jest.fn().mockResolvedValue(undefined),
+};
+
 describe('ReactionService', () => {
   let service: ReactionService;
 
@@ -37,6 +43,7 @@ describe('ReactionService', () => {
         { provide: getRepositoryToken(Wish), useValue: mockWishRepo },
         { provide: getRepositoryToken(User), useValue: mockUserRepo },
         { provide: NotificationService, useValue: mockNotificationService },
+        { provide: EventLogService, useValue: mockEventService },
       ],
     }).compile();
 
@@ -160,6 +167,53 @@ describe('ReactionService', () => {
       const result = await service.getMyReaction('u-1', 'w-1');
 
       expect(result).toEqual({ emoji: null });
+    });
+  });
+
+  // --- événements ---
+
+  describe('événements EventLog', () => {
+    it('log REACTION_UPSERT (action: create) pour une nouvelle réaction', async () => {
+      mockWishRepo.findOne.mockResolvedValue({ id: 'w-1', user_id: 'owner', is_private: false, title: 'Mon souhait' });
+      mockReactionRepo.findOne.mockResolvedValue(null);
+      mockReactionRepo.create.mockReturnValue({});
+      mockReactionRepo.save.mockResolvedValue({});
+      mockUserRepo.findOne.mockResolvedValue({ pseudo: 'alice' });
+
+      await service.upsert('u-1', 'w-1', { emoji: '❤️' });
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.REACTION_UPSERT,
+        'u-1',
+        expect.objectContaining({ wish_id: 'w-1', emoji: '❤️', action: 'create' }),
+      );
+    });
+
+    it('log REACTION_UPSERT (action: update) pour une réaction existante', async () => {
+      mockWishRepo.findOne.mockResolvedValue({ id: 'w-1', user_id: 'owner', is_private: false, title: 'Mon souhait' });
+      mockReactionRepo.findOne.mockResolvedValue({ user_id: 'u-1', wish_id: 'w-1', emoji: '👍' });
+      mockReactionRepo.save.mockResolvedValue({});
+
+      await service.upsert('u-1', 'w-1', { emoji: '❤️' });
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.REACTION_UPSERT,
+        'u-1',
+        expect.objectContaining({ wish_id: 'w-1', emoji: '❤️', action: 'update' }),
+      );
+    });
+
+    it('log REACTION_DELETE avant le remove', async () => {
+      mockReactionRepo.findOne.mockResolvedValue({ user_id: 'u-1', wish_id: 'w-1', emoji: '❤️' });
+      mockReactionRepo.remove.mockResolvedValue(undefined);
+
+      await service.delete('u-1', 'w-1');
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.REACTION_DELETE,
+        'u-1',
+        expect.objectContaining({ wish_id: 'w-1' }),
+      );
     });
   });
 });

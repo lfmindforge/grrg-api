@@ -5,6 +5,8 @@ import { Comment } from './comment.entity';
 import { Wish } from '../wish/wish.entity';
 import { CommentService } from './comment.service';
 import { NotificationService } from '../notifications/notification.service';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 const mockQb = {
   leftJoinAndSelect: jest.fn().mockReturnThis(),
@@ -31,6 +33,10 @@ const mockNotificationService = {
   notify: jest.fn().mockResolvedValue(undefined),
 };
 
+const mockEventService = {
+  log: jest.fn().mockResolvedValue(undefined),
+};
+
 describe('CommentService', () => {
   let service: CommentService;
 
@@ -41,6 +47,7 @@ describe('CommentService', () => {
         { provide: getRepositoryToken(Comment), useValue: mockCommentRepo },
         { provide: getRepositoryToken(Wish), useValue: mockWishRepo },
         { provide: NotificationService, useValue: mockNotificationService },
+        { provide: EventLogService, useValue: mockEventService },
       ],
     }).compile();
 
@@ -220,6 +227,42 @@ describe('CommentService', () => {
       mockCommentRepo.findOne.mockResolvedValue(null);
 
       await expect(service.reportComment('u-1', 'unknown')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // --- événements ---
+
+  describe('événements EventLog', () => {
+    it('log COMMENT_CREATE après la sauvegarde', async () => {
+      const wish = { id: 'wish-1', is_private: false, user_id: 'other-user', title: 'Un souhait' };
+      const saved = { id: 'c-1' };
+      const full = { id: 'c-1', wish_id: 'wish-1', content: 'Top!', is_reported: false, created_at: new Date(), user: { id: 'u-1', pseudo: 'alice', avatar_url: null, grade: 'etincelle' } };
+      mockWishRepo.findOne.mockResolvedValue(wish);
+      mockCommentRepo.create.mockReturnValue(saved);
+      mockCommentRepo.save.mockResolvedValue(saved);
+      mockCommentRepo.findOne.mockResolvedValue(full);
+
+      await service.addComment('u-1', 'wish-1', { content: 'Top!' });
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.COMMENT_CREATE,
+        'u-1',
+        expect.objectContaining({ wish_id: 'wish-1', comment_id: 'c-1' }),
+      );
+    });
+
+    it('log COMMENT_DELETE avant le soft-remove', async () => {
+      const comment = { id: 'c-1', user_id: 'u-1', wish_id: 'wish-1' };
+      mockCommentRepo.findOne.mockResolvedValue(comment);
+      mockCommentRepo.softRemove.mockResolvedValue({});
+
+      await service.deleteComment('u-1', 'c-1');
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.COMMENT_DELETE,
+        'u-1',
+        expect.objectContaining({ comment_id: 'c-1', wish_id: 'wish-1' }),
+      );
     });
   });
 });
