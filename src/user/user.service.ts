@@ -23,6 +23,8 @@ import { SupabaseStorageService } from '../common/storage/supabase-storage.servi
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserExportDto } from './dto/user-export.dto';
 import { BadgeService } from '../badge/badge.service';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 @Injectable()
 export class UserService {
@@ -35,6 +37,7 @@ export class UserService {
     private readonly supabaseStorage: SupabaseStorageService,
     private readonly config: ConfigService,
     private readonly badgeService: BadgeService,
+    private readonly eventService: EventLogService,
   ) {}
 
   findById(id: string): Promise<User | null> {
@@ -122,12 +125,18 @@ export class UserService {
       user!.avatar_url = await this.supabaseStorage.upload(bucket, path, file);
     }
 
+    const updatedFields = Object.keys(dto).filter((k) => (dto as Record<string, unknown>)[k] !== undefined);
+    if (file) updatedFields.push('avatar_url');
     await this.userRepo.save(user!);
+    await this.eventService.log(EventType.USER_UPDATE, userId, { updated_fields: updatedFields });
     return this.getProfile(userId);
   }
 
   async deleteMe(userId: string): Promise<void> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
+
+    // log AVANT anonymisation pour conserver le vrai pseudo dans l'historique
+    await this.eventService.log(EventType.USER_DELETE, userId, { pseudo: user!.pseudo });
 
     if (user!.avatar_url) {
       const bucket = this.config.getOrThrow<string>('SUPABASE_BUCKET_AVATARS');
@@ -159,6 +168,8 @@ export class UserService {
         .withDeleted()
         .getMany(),
     ]);
+
+    await this.eventService.log(EventType.USER_EXPORT, userId, {});
 
     return {
       profile: {

@@ -10,9 +10,10 @@ import { UserController } from './user.controller';
 import { StorageModule } from '../common/storage/storage.module';
 import { FollowModule } from '../follow/follow.module';
 import { BadgeModule } from '../badge/badge.module';
+import { EventLogModule } from '../event-log/event-log.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Wish, Donation, Follow, RefreshToken]), StorageModule, FollowModule, BadgeModule],
+  imports: [TypeOrmModule.forFeature([User, Wish, Donation, Follow, RefreshToken]), StorageModule, FollowModule, BadgeModule, EventLogModule],
   controllers: [UserController],
   providers: [UserService],
   exports: [UserService],
