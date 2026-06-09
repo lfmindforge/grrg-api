@@ -8,6 +8,8 @@ import { QueryCommentsDto } from './dto/query-comments.dto';
 import { CommentResponseDto, PaginatedCommentsDto } from './comment.types';
 import { NotificationService } from '../notifications/notification.service';
 import { NotificationType, truncateTitle } from '../notifications/notification.types';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 @Injectable()
 export class CommentService {
@@ -17,6 +19,7 @@ export class CommentService {
     @InjectRepository(Wish)
     private readonly wishRepo: Repository<Wish>,
     private readonly notificationService: NotificationService,
+    private readonly eventService: EventLogService,
   ) {}
 
   async getComments(wishId: string, dto: QueryCommentsDto): Promise<PaginatedCommentsDto> {
@@ -60,6 +63,8 @@ export class CommentService {
       relations: ['user'],
     });
 
+    await this.eventService.log(EventType.COMMENT_CREATE, userId, { wish_id: wishId, comment_id: full!.id });
+
     if (wish.user_id !== userId) {
       await this.notificationService.notify(wish.user_id, NotificationType.COMMENT_RECEIVED, {
         commenter_pseudo: full!.user.pseudo,
@@ -76,6 +81,7 @@ export class CommentService {
     const comment = await this.commentRepo.findOne({ where: { id: commentId } });
     if (!comment) throw new NotFoundException('Commentaire introuvable');
     if (comment.user_id !== userId) throw new ForbiddenException('Accès refusé');
+    await this.eventService.log(EventType.COMMENT_DELETE, userId, { comment_id: commentId, wish_id: comment.wish_id });
     await this.commentRepo.softRemove(comment);
   }
 
