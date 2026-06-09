@@ -4,9 +4,10 @@ import { Badge } from './badge.entity';
 import { Evaluation } from '../donation/evaluation.entity';
 import { BadgeService } from './badge.service';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EventLogModule } from '../event-log/event-log.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Badge, Evaluation]), NotificationsModule],
+  imports: [TypeOrmModule.forFeature([Badge, Evaluation]), NotificationsModule, EventLogModule],
   providers: [BadgeService],
   exports: [BadgeService],
 })

@@ -7,6 +7,8 @@ import { Evaluation } from '../donation/evaluation.entity';
 import { BadgeType, BadgeDto } from './badge.types';
 import { NotificationService } from '../notifications/notification.service';
 import { NotificationType } from '../notifications/notification.types';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 @Injectable()
 export class BadgeService {
@@ -16,6 +18,7 @@ export class BadgeService {
     @InjectRepository(Evaluation)
     private readonly evaluationRepo: Repository<Evaluation>,
     private readonly notificationService: NotificationService,
+    private readonly eventService: EventLogService,
   ) {}
 
   async award(userId: string, type: BadgeType, period?: string): Promise<void> {
@@ -24,11 +27,13 @@ export class BadgeService {
     });
     if (existing) {
       await this.badgeRepo.save({ ...existing, count: existing.count + 1 });
+      await this.eventService.log(EventType.BADGE_AWARD, userId, { badge_type: type, period: period ?? null, action: 'increment' });
       return;
     }
     await this.badgeRepo.save(
       this.badgeRepo.create({ user_id: userId, badge_type: type, period: period ?? null, count: 1 }),
     );
+    await this.eventService.log(EventType.BADGE_AWARD, userId, { badge_type: type, period: period ?? null, action: 'new' });
     await this.notificationService.notify(userId, NotificationType.BADGE_EARNED, {
       badge_type: type,
     });

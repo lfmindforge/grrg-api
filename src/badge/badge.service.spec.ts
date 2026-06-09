@@ -5,12 +5,15 @@ import { Badge } from './badge.entity';
 import { Evaluation } from '../donation/evaluation.entity';
 import { BadgeType } from './badge.types';
 import { NotificationService } from '../notifications/notification.service';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 describe('BadgeService', () => {
   let service: BadgeService;
   let badgeRepo: { findOne: jest.Mock; create: jest.Mock; save: jest.Mock; find: jest.Mock };
   let evaluationRepo: { createQueryBuilder: jest.Mock };
   let notificationService: { notify: jest.Mock };
+  let mockEventService: { log: jest.Mock };
   let mockQb: {
     innerJoin: jest.Mock;
     select: jest.Mock;
@@ -43,6 +46,7 @@ describe('BadgeService', () => {
     };
     evaluationRepo = { createQueryBuilder: jest.fn().mockReturnValue(mockQb) };
     notificationService = { notify: jest.fn().mockResolvedValue(undefined) };
+    mockEventService = { log: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -50,6 +54,7 @@ describe('BadgeService', () => {
         { provide: getRepositoryToken(Badge), useValue: badgeRepo },
         { provide: getRepositoryToken(Evaluation), useValue: evaluationRepo },
         { provide: NotificationService, useValue: notificationService },
+        { provide: EventLogService, useValue: mockEventService },
       ],
     }).compile();
 
@@ -159,6 +164,34 @@ describe('BadgeService', () => {
       mockQb.getRawMany.mockResolvedValue([]);
       await service.awardMonthlyBiggestDonor();
       expect(badgeRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- événements ---
+
+  describe('événements EventLog', () => {
+    it('log BADGE_AWARD (action: new) pour un nouveau badge', async () => {
+      badgeRepo.findOne.mockResolvedValue(null);
+
+      await service.award(USER_ID, BadgeType.FASTEST_DONOR);
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.BADGE_AWARD,
+        USER_ID,
+        expect.objectContaining({ badge_type: BadgeType.FASTEST_DONOR, action: 'new' }),
+      );
+    });
+
+    it('log BADGE_AWARD (action: increment) pour un badge existant', async () => {
+      badgeRepo.findOne.mockResolvedValue({ id: 'b-1', user_id: USER_ID, badge_type: BadgeType.FASTEST_DONOR, count: 1 });
+
+      await service.award(USER_ID, BadgeType.FASTEST_DONOR);
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.BADGE_AWARD,
+        USER_ID,
+        expect.objectContaining({ badge_type: BadgeType.FASTEST_DONOR, action: 'increment' }),
+      );
     });
   });
 });
