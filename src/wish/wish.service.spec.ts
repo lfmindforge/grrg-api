@@ -13,6 +13,8 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 describe('WishService', () => {
   let service: WishService;
@@ -40,6 +42,7 @@ describe('WishService', () => {
     getRawAndEntities: jest.Mock;
   };
   let supabaseStorage: { upload: jest.Mock; delete: jest.Mock; extractPath: jest.Mock };
+  let mockEventService: { log: jest.Mock };
 
   beforeEach(async () => {
     mockQb = {
@@ -70,6 +73,7 @@ describe('WishService', () => {
       delete: jest.fn().mockResolvedValue(undefined),
       extractPath: jest.fn().mockReturnValue('user-id/photo.jpg'),
     };
+    mockEventService = { log: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -80,6 +84,7 @@ describe('WishService', () => {
           provide: ConfigService,
           useValue: { getOrThrow: () => 'wishes-media' },
         },
+        { provide: EventLogService, useValue: mockEventService },
       ],
     }).compile();
 
@@ -640,6 +645,50 @@ describe('WishService', () => {
       const result = await service.findCategories();
 
       expect(result).toEqual([]);
+    });
+  });
+
+  // --- événements ---
+
+  describe('événements EventLog', () => {
+    it('log WISH_CREATE après la sauvegarde', async () => {
+      const savedWish = { id: 'uuid-1', title: 'Mon souhait', category: 'Électronique', is_private: false, user_id: 'user-id', media_urls: [], status: WishStatus.PENDING };
+      wishRepo.create.mockReturnValue(savedWish);
+      wishRepo.save.mockResolvedValue(savedWish);
+
+      await service.create('user-id', { title: 'Mon souhait', description: 'desc', category: 'Électronique' }, []);
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.WISH_CREATE,
+        'user-id',
+        expect.objectContaining({ title: 'Mon souhait', category: 'Électronique' }),
+      );
+    });
+
+    it('log WISH_UPDATE avec updated_fields', async () => {
+      wishRepo.findOne.mockResolvedValue({ id: 'uuid-1', user_id: 'user-id', title: 'Ancien', status: WishStatus.PENDING, media_urls: [] });
+      wishRepo.save.mockImplementation((w) => Promise.resolve(w));
+
+      await service.update('uuid-1', 'user-id', { title: 'Nouveau' });
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.WISH_UPDATE,
+        'user-id',
+        expect.objectContaining({ wish_id: 'uuid-1', updated_fields: ['title'] }),
+      );
+    });
+
+    it('log WISH_DELETE avant le soft-remove', async () => {
+      wishRepo.findOne.mockResolvedValue({ id: 'uuid-1', user_id: 'user-id', title: 'Mon souhait', status: WishStatus.PENDING, media_urls: [] });
+      wishRepo.softRemove.mockResolvedValue({});
+
+      await service.softDelete('uuid-1', 'user-id');
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.WISH_DELETE,
+        'user-id',
+        expect.objectContaining({ wish_id: 'uuid-1', title: 'Mon souhait' }),
+      );
     });
   });
 });
