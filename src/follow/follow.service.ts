@@ -7,6 +7,8 @@ import { User } from '../user/user.entity';
 import { SuggestionDto } from './follow.types';
 import { NotificationService } from '../notifications/notification.service';
 import { NotificationType } from '../notifications/notification.types';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 @Injectable()
 export class FollowService {
@@ -17,6 +19,7 @@ export class FollowService {
     private readonly userRepo: Repository<User>,
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly notificationService: NotificationService,
+    private readonly eventService: EventLogService,
   ) {}
 
   async follow(followerId: string, followedId: string): Promise<void> {
@@ -33,6 +36,7 @@ export class FollowService {
 
     const follow = this.followRepo.create({ follower_id: followerId, followed_id: followedId });
     await this.followRepo.save(follow);
+    await this.eventService.log(EventType.FOLLOW_CREATE, followerId, { followed_id: followedId });
 
     const follower = await this.userRepo.findOne({ where: { id: followerId } });
     await this.notificationService.notify(followedId, NotificationType.NEW_FOLLOWER, {
@@ -46,6 +50,7 @@ export class FollowService {
       where: { follower_id: followerId, followed_id: followedId },
     });
     if (!follow) throw new NotFoundException('Relation de suivi introuvable');
+    await this.eventService.log(EventType.FOLLOW_DELETE, followerId, { followed_id: followedId });
     await this.followRepo.remove(follow);
   }
 
