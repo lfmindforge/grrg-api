@@ -16,6 +16,8 @@ import { BadgeService } from '../badge/badge.service';
 import { BadgeType } from '../badge/badge.types';
 import { NotificationService } from '../notifications/notification.service';
 import { NotificationType, truncateTitle } from '../notifications/notification.types';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 @Injectable()
 export class DonationService {
@@ -28,6 +30,7 @@ export class DonationService {
     private readonly userRepo: Repository<User>,
     private readonly badgeService: BadgeService,
     private readonly notificationService: NotificationService,
+    private readonly eventService: EventLogService,
   ) {}
 
   async propose(donorId: string, dto: CreateDonationDto): Promise<Donation> {
@@ -56,6 +59,7 @@ export class DonationService {
     });
 
     const saved = await this.donationRepo.save(donation);
+    await this.eventService.log(EventType.DONATION_CREATE, donorId, { wish_id: dto.wish_id, type: dto.type, is_anonymous: saved.is_anonymous });
     wish.status = WishStatus.IN_PROGRESS;
     await this.wishRepo.save(wish);
 
@@ -95,7 +99,9 @@ export class DonationService {
     }
 
     donation.status = DonationStatus.COMPLETED;
-    return this.donationRepo.save(donation);
+    const saved = await this.donationRepo.save(donation);
+    await this.eventService.log(EventType.DONATION_CONFIRM, userId, { donation_id: donationId, wish_id: donation.wish.id });
+    return saved;
   }
 
   async findMyDonations(userId: string): Promise<Donation[]> {
