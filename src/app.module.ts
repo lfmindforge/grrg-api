@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import Joi from 'joi';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -24,7 +25,31 @@ import KeyvRedis from '@keyv/redis';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validationSchema: Joi.object({
+        DATABASE_URL:                      Joi.string().required(),
+        JWT_SECRET:                        Joi.string().required(),
+        JWT_REFRESH_SECRET:                Joi.string().required(),
+        JWT_ACCESS_EXPIRES_IN:             Joi.string().default('15m'),
+        JWT_REFRESH_EXPIRES_IN:            Joi.string().default('7d'),
+        JWT_REFRESH_EXPIRES_MS:            Joi.number().default(604800000),
+        GOOGLE_CLIENT_ID:                  Joi.string().required(),
+        GOOGLE_CLIENT_SECRET:              Joi.string().required(),
+        GOOGLE_CALLBACK_URL:               Joi.string().required(),
+        GITHUB_CLIENT_ID:                  Joi.string().required(),
+        GITHUB_CLIENT_SECRET:              Joi.string().required(),
+        GITHUB_CALLBACK_URL:               Joi.string().required(),
+        SUPABASE_URL:                      Joi.string().required(),
+        SUPABASE_SERVICE_ROLE_KEY:         Joi.string().required(),
+        SUPABASE_BUCKET_WISHES:            Joi.string().default('wishes-media'),
+        SUPABASE_BUCKET_AVATARS:           Joi.string().default('avatars'),
+        SUPABASE_BUCKET_EVALUATIONS_PROOF: Joi.string().default('evaluations-proof'),
+        FRONTEND_URL:                      Joi.string().required(),
+        REDIS_URL:                         Joi.string().required(),
+        PORT:                              Joi.number().default(3001),
+      }),
+    }),
     ScheduleModule.forRoot(),
     BadgeModule,
     EventLogModule,
