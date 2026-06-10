@@ -26,14 +26,16 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
+  // 10 inscriptions max sur 10 minutes par IP — anti abus de création de comptes
   @Post('register')
   @Public()
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 10, ttl: 600_000 } })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
 
-  // Override de la limite globale (100/10min) — 5 tentatives max sur 10 minutes
+  // 5 tentatives max sur 10 minutes par IP — anti brute-force mot de passe
   @Post('login')
   @Public()
   @HttpCode(HttpStatus.OK)

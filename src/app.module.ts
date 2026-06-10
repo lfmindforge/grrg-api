@@ -40,8 +40,8 @@ import KeyvRedis from '@keyv/redis';
       }),
       inject: [ConfigService],
     }),
-    //Config global, la route login ovveride @throttle (5/10min)
-    ThrottlerModule.forRoot([{ name: 'default', ttl: 600_000, limit: 100 }]),
+    // Seuil large pour la navigation normale — les routes sensibles overrident avec @Throttle
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }]),
     // Cache in-memory global — TTL 60s par défaut, overridable par cache.set(key, val, ttl)
     CacheModule.registerAsync({
       isGlobal: true,
