@@ -1,11 +1,15 @@
 import { Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiCookieAuth } from '@nestjs/swagger';
 import { FollowService } from './follow.service';
 
+@ApiTags('follows')
+@ApiCookieAuth('access_token')
 @Controller('follows')
 export class FollowController {
   constructor(private readonly followService: FollowService) {}
 
   @Get(':id/followers')
+  @ApiOperation({ summary: 'Liste des abonnés d\'un utilisateur' })
   getFollowers(
     @Param('id', ParseUUIDPipe) id: string,
   ) {
@@ -13,6 +17,7 @@ export class FollowController {
   }
 
   @Get(':id/following')
+  @ApiOperation({ summary: 'Liste des abonnements d\'un utilisateur' })
   getFollowing(
     @Param('id', ParseUUIDPipe) id: string,
   ) {
@@ -30,6 +35,7 @@ export class FollowController {
 
   @Post(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Suivre un utilisateur' })
   follow(
     @Req() req: { user: { id: string } },
     @Param('id', ParseUUIDPipe) id: string,
@@ -39,6 +45,7 @@ export class FollowController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Ne plus suivre un utilisateur' })
   unfollow(
     @Req() req: { user: { id: string } },
     @Param('id', ParseUUIDPipe) id: string,

@@ -10,6 +10,7 @@ import {
   UseGuards,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { Throttle } from '@nestjs/throttler';
@@ -19,6 +20,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { Public } from '../common/decorators/public.decorator';
 import { ConfigService } from '@nestjs/config';
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -31,6 +33,7 @@ export class AuthController {
   @Public()
   @HttpCode(HttpStatus.CREATED)
   @Throttle({ default: { limit: 10, ttl: 600_000 } })
+  @ApiOperation({ summary: 'Créer un compte email/mot de passe' })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
@@ -40,6 +43,7 @@ export class AuthController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 600_000 } })
+  @ApiOperation({ summary: 'Connexion email/mot de passe' })
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
@@ -53,6 +57,7 @@ export class AuthController {
   @Post('refresh')
   @Public()
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Renouveler le access token via le refresh token cookie' })
   async refresh(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -69,6 +74,7 @@ export class AuthController {
   @Post('logout')
   @Public()
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Déconnexion — révoque le refresh token et efface les cookies' })
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const token = req.cookies?.refresh_token as string | undefined;
     if (token) await this.authService.logout(token);
@@ -88,6 +94,7 @@ export class AuthController {
   @Get('google')
   @Public()
   @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Redirection vers Google OAuth' })
   googleAuth() {
     // Passport intercepte cette route et redirige vers Google — NestJS n'atteint jamais ce corps
   }
@@ -114,6 +121,7 @@ export class AuthController {
   @Get('github')
   @Public()
   @UseGuards(AuthGuard('github'))
+  @ApiOperation({ summary: 'Redirection vers GitHub OAuth' })
   githubAuth() {
     // Passport intercepte cette route et redirige vers GitHub — NestJS n'atteint jamais ce corps
   }

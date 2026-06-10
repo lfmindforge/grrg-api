@@ -1,9 +1,11 @@
 import { Controller, Get, Inject } from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { DataSource } from 'typeorm';
 import { Public } from '../common/decorators/public.decorator';
 
+@ApiTags('health')
 @Controller('health')
 export class HealthController {
   constructor(
@@ -14,6 +16,7 @@ export class HealthController {
 
   @Get()
   @Public()
+  @ApiOperation({ summary: 'État de l\'API (DB + Redis + uptime)' })
   async check() {
     const [database, redis] = await Promise.all([
       this.dataSource.query('SELECT 1').then(() => 'connected').catch(() => 'disconnected'),
