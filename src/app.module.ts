@@ -21,6 +21,7 @@ import { ReactionModule } from './reaction/reaction.module';
 import { FeedModule } from './feed/feed.module';
 import { BadgeModule } from './badge/badge.module';
 import { EventLogModule } from './event-log/event-log.module';
+import { HealthModule } from './health/health.module';
 import KeyvRedis from '@keyv/redis';
 
 @Module({
@@ -53,6 +54,7 @@ import KeyvRedis from '@keyv/redis';
     ScheduleModule.forRoot(),
     BadgeModule,
     EventLogModule,
+    HealthModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
