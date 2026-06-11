@@ -13,6 +13,8 @@ export function buildEmailTemplate(
       return evaluationReceived(payload);
     case NotificationType.GRADE_UP:
       return gradeUp(payload);
+    case NotificationType.WISH_EXPIRED:
+      return wishExpired(payload);
     default:
       return null;
   }
@@ -57,6 +59,19 @@ function gradeUp(payload: Record<string, unknown>): MailTemplate {
       <h2>Félicitations, vous avez monté de grade !</h2>
       <p>Vous passez de <strong>${previousGrade}</strong> à <strong>${grade}</strong>.</p>
       <p>Continuez à donner pour progresser encore plus.</p>
+    `,
+  };
+}
+
+function wishExpired(payload: Record<string, unknown>): MailTemplate {
+  const wishTitle = payload['wish_title'] as string;
+
+  return {
+    subject: `Gift Rumble — Votre souhait a expiré`,
+    html: `
+      <h2>Votre souhait a expiré</h2>
+      <p>Votre souhait <em>«${wishTitle}»</em> a dépassé sa date d'expiration.</p>
+      <p>Si votre besoin est toujours d'actualité, mettez à jour la date ou créez un nouveau souhait.</p>
     `,
   };
 }

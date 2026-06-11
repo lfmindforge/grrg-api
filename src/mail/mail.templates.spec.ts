@@ -55,6 +55,17 @@ describe('buildEmailTemplate', () => {
     expect(result!.html).toContain('etincelle');
   });
 
+  it('retourne un template pour wish_expired', () => {
+    const result = buildEmailTemplate(NotificationType.WISH_EXPIRED, {
+      wish_title: 'Un vélo électrique',
+      wish_id: 'w1',
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.subject).toContain('expiré');
+    expect(result!.html).toContain('Un vélo électrique');
+  });
+
   it('retourne null pour un type sans template', () => {
     const result = buildEmailTemplate(NotificationType.COMMENT_RECEIVED, {});
     expect(result).toBeNull();
