@@ -50,6 +50,8 @@ import KeyvRedis from '@keyv/redis';
         REDIS_URL:                         Joi.string().required(),
         PORT:                              Joi.number().default(3001),
         NODE_ENV:                          Joi.string().valid('development', 'production', 'test').default('development'),
+        RESEND_API_KEY:                    Joi.string().required(),
+        EMAIL_FROM:                        Joi.string().email().required(),
       }),
     }),
     ScheduleModule.forRoot(),
