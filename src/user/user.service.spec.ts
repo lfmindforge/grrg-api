@@ -19,6 +19,7 @@ const mockUserRepo = {
   create: jest.fn(),
   save: jest.fn(),
   softRemove: jest.fn(),
+  createQueryBuilder: jest.fn(),
 };
 
 const mockWishRepo = {
@@ -612,6 +613,45 @@ describe('UserService', () => {
       await service.exportMe('user-id');
 
       expect(mockEventService.log).toHaveBeenCalledWith(EventType.USER_EXPORT, 'user-id', {});
+    });
+  });
+
+  // --- search() ---
+
+  describe('search()', () => {
+    const buildQb = (results: object[]) => ({
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue(results),
+    });
+
+    it('retourne les utilisateurs dont le pseudo contient le mot', async () => {
+      const mockUser = { id: 'u1', pseudo: 'alice', avatar_url: null, grade: 'etincelle', glow_points: 10 };
+      const mockQb = buildQb([mockUser]);
+      mockUserRepo.createQueryBuilder.mockReturnValue(mockQb);
+
+      const result = await service.search('alice');
+
+      expect(result).toEqual([mockUser]);
+      expect(mockQb.andWhere).toHaveBeenCalledWith('user.pseudo ILIKE :w0', { w0: '%alice%' });
+    });
+
+    it('retourne [] si q est vide', async () => {
+      const result = await service.search('');
+      expect(result).toEqual([]);
+    });
+
+    it('applique un ILIKE par mot en AND pour une recherche multi-mots', async () => {
+      const mockQb = buildQb([]);
+      mockUserRepo.createQueryBuilder.mockReturnValue(mockQb);
+
+      await service.search('ali ce');
+
+      expect(mockQb.andWhere).toHaveBeenCalledWith('user.pseudo ILIKE :w0', { w0: '%ali%' });
+      expect(mockQb.andWhere).toHaveBeenCalledWith('user.pseudo ILIKE :w1', { w1: '%ce%' });
     });
   });
 });

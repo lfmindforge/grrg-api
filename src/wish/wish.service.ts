@@ -51,10 +51,13 @@ export class WishService {
     }
 
     if (query.search) {
-      qb.andWhere(
-        '(wish.title ILIKE :search OR wish.description ILIKE :search)',
-        { search: `%${query.search}%` },
-      );
+      const words = query.search.trim().split(/\s+/).filter(Boolean);
+      words.forEach((word, i) => {
+        qb.andWhere(
+          `(wish.title ILIKE :w${i} OR wish.description ILIKE :w${i})`,
+          { [`w${i}`]: `%${word}%` },
+        );
+      });
     }
 
     const sortOrder: 'ASC' | 'DESC' = query.order === 'asc' ? 'ASC' : 'DESC';

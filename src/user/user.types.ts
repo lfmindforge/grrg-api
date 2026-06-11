@@ -18,6 +18,14 @@ export interface WishPreviewDto {
   status: WishStatus;
 }
 
+export interface UserSearchResultDto {
+  id: string;
+  pseudo: string;
+  avatar_url: string | null;
+  grade: string;
+  glow_points: number;
+}
+
 export interface UserPublicProfileDto {
   id: string;
   pseudo: string;

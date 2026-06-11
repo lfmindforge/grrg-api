@@ -148,12 +148,25 @@ describe('WishService', () => {
       );
     });
 
-    it('recherche par mot-clé (ILIKE sur title et description)', async () => {
+    it('recherche par mot-clé simple (ILIKE sur title et description)', async () => {
       await service.findPublic({ search: 'vélo' });
 
       expect(mockQb.andWhere).toHaveBeenCalledWith(
-        '(wish.title ILIKE :search OR wish.description ILIKE :search)',
-        { search: '%vélo%' },
+        '(wish.title ILIKE :w0 OR wish.description ILIKE :w0)',
+        { w0: '%vélo%' },
+      );
+    });
+
+    it('recherche multi-mots : applique un ILIKE par mot en AND', async () => {
+      await service.findPublic({ search: 'vélo rouge' });
+
+      expect(mockQb.andWhere).toHaveBeenCalledWith(
+        '(wish.title ILIKE :w0 OR wish.description ILIKE :w0)',
+        { w0: '%vélo%' },
+      );
+      expect(mockQb.andWhere).toHaveBeenCalledWith(
+        '(wish.title ILIKE :w1 OR wish.description ILIKE :w1)',
+        { w1: '%rouge%' },
       );
     });
 
