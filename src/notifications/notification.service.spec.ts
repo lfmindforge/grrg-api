@@ -1,9 +1,11 @@
 import { Subject } from 'rxjs';
 import { NotificationService } from './notification.service';
 import { NotificationType } from './notification.types';
+import { MailService } from '../mail/mail.service';
 
 describe('NotificationService', () => {
   let service: NotificationService;
+
   const mockRepo = {
     create: jest.fn(),
     save: jest.fn(),
@@ -11,9 +13,21 @@ describe('NotificationService', () => {
     update: jest.fn(),
   };
 
+  const mockUserRepo = {
+    findOne: jest.fn(),
+  };
+
+  const mockMailService: jest.Mocked<Pick<MailService, 'sendMail'>> = {
+    sendMail: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new NotificationService(mockRepo as any);
+    service = new NotificationService(
+      mockRepo as any,
+      mockUserRepo as any,
+      mockMailService as any,
+    );
   });
 
   it('insère une notification en base et la retourne', async () => {
@@ -44,6 +58,7 @@ describe('NotificationService', () => {
     const notif = { id: 'n1', user_id: 'u1', type: 'grade_up', payload: {}, is_read: false, created_at: new Date() };
     mockRepo.create.mockReturnValue(notif);
     mockRepo.save.mockResolvedValue(notif);
+    mockUserRepo.findOne.mockResolvedValue({ email: 'user@example.com' });
 
     const subject = service.registerClient('u1');
     const received: unknown[] = [];
@@ -53,6 +68,59 @@ describe('NotificationService', () => {
 
     expect(mockRepo.save).toHaveBeenCalled();
     expect(received).toHaveLength(1);
+  });
+
+  it('notify() envoie un email quand un template existe pour le type', async () => {
+    const notif = { id: 'n1', user_id: 'u1', type: 'evaluation_received', payload: {}, is_read: false, created_at: new Date() };
+    mockRepo.create.mockReturnValue(notif);
+    mockRepo.save.mockResolvedValue(notif);
+    mockUserRepo.findOne.mockResolvedValue({ email: 'donor@example.com' });
+
+    await service.notify('u1', NotificationType.EVALUATION_RECEIVED, {
+      glow_awarded: 30,
+      recipient_pseudo: 'Bob',
+      wish_id: 'w1',
+    });
+
+    expect(mockMailService.sendMail).toHaveBeenCalledWith(
+      'donor@example.com',
+      expect.stringContaining('évalué'),
+      expect.stringContaining('30'),
+    );
+  });
+
+  it("notify() n'envoie pas d'email quand il n'y a pas de template pour le type", async () => {
+    const notif = { id: 'n1', user_id: 'u1', type: 'comment_received', payload: {}, is_read: false, created_at: new Date() };
+    mockRepo.create.mockReturnValue(notif);
+    mockRepo.save.mockResolvedValue(notif);
+    mockUserRepo.findOne.mockResolvedValue({ email: 'user@example.com' });
+
+    await service.notify('u1', NotificationType.COMMENT_RECEIVED, { comment: 'bravo' });
+
+    expect(mockMailService.sendMail).not.toHaveBeenCalled();
+  });
+
+  it("notify() ne bloque pas si l'email échoue", async () => {
+    const notif = { id: 'n1', user_id: 'u1', type: 'grade_up', payload: {}, is_read: false, created_at: new Date() };
+    mockRepo.create.mockReturnValue(notif);
+    mockRepo.save.mockResolvedValue(notif);
+    mockUserRepo.findOne.mockResolvedValue({ email: 'user@example.com' });
+    mockMailService.sendMail.mockRejectedValueOnce(new Error('Resend down'));
+
+    await expect(
+      service.notify('u1', NotificationType.GRADE_UP, { grade: 'lumiere', previous_grade: 'etincelle' }),
+    ).resolves.not.toThrow();
+  });
+
+  it("notify() n'envoie pas d'email si l'utilisateur est introuvable", async () => {
+    const notif = { id: 'n1', user_id: 'u1', type: 'grade_up', payload: {}, is_read: false, created_at: new Date() };
+    mockRepo.create.mockReturnValue(notif);
+    mockRepo.save.mockResolvedValue(notif);
+    mockUserRepo.findOne.mockResolvedValue(null);
+
+    await service.notify('u1', NotificationType.GRADE_UP, { grade: 'lumiere', previous_grade: 'etincelle' });
+
+    expect(mockMailService.sendMail).not.toHaveBeenCalled();
   });
 
   it('findByUser() retourne les 30 dernières notifs et unread_count', async () => {
@@ -75,9 +143,7 @@ describe('NotificationService', () => {
 
   it('markRead() appelle update avec user_id + notif id', async () => {
     mockRepo.update.mockResolvedValue({ affected: 1 });
-
     await service.markRead('u1', 'n1');
-
     expect(mockRepo.update).toHaveBeenCalledWith(
       { id: 'n1', user_id: 'u1' },
       { is_read: true },
@@ -86,9 +152,7 @@ describe('NotificationService', () => {
 
   it('markAllRead() passe toutes les notifs non lues à is_read=true', async () => {
     mockRepo.update.mockResolvedValue({ affected: 3 });
-
     await service.markAllRead('u1');
-
     expect(mockRepo.update).toHaveBeenCalledWith(
       { user_id: 'u1', is_read: false },
       { is_read: true },
@@ -99,9 +163,7 @@ describe('NotificationService', () => {
     const subject = service.registerClient('u1');
     let completed = false;
     subject.subscribe({ complete: () => { completed = true; } });
-
     service.removeClient('u1', subject);
-
     expect(completed).toBe(true);
   });
 });
