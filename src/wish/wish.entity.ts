@@ -42,6 +42,9 @@ export class Wish {
   @Column({ type: 'enum', enum: WishStatus, default: WishStatus.PENDING })
   status!: WishStatus;
 
+  @Column({ type: 'timestamptz', nullable: true, default: null })
+  expires_at!: Date | null;
+
   @CreateDateColumn()
   created_at!: Date;
 
