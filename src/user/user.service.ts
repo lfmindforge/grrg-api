@@ -15,6 +15,7 @@ import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import {
   CreateUserData,
   UserPublicProfileDto,
+  UserSearchResultDto,
   WishPreviewDto,
 } from './user.types';
 import { WishStatus } from '../wish/wish.types';
@@ -56,6 +57,24 @@ export class UserService {
     return this.userRepo.findOne({
       where: { oauth_provider: provider, oauth_id: oauthId },
     });
+  }
+
+  async search(q: string): Promise<UserSearchResultDto[]> {
+    const words = q.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+
+    const qb = this.userRepo
+      .createQueryBuilder('user')
+      .select(['user.id', 'user.pseudo', 'user.avatar_url', 'user.grade', 'user.glow_points'])
+      .where('user.deleted_at IS NULL');
+
+    words.forEach((word, i) => {
+      qb.andWhere(`user.pseudo ILIKE :w${i}`, { [`w${i}`]: `%${word}%` });
+    });
+
+    qb.orderBy('user.glow_points', 'DESC').limit(20);
+
+    return qb.getMany() as Promise<UserSearchResultDto[]>;
   }
 
   create(data: CreateUserData): Promise<User> {

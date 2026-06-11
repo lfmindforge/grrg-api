@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Query,
   Body,
   Req,
   UploadedFile,
@@ -20,7 +21,7 @@ import { UserService } from './user.service';
 import { FollowService } from '../follow/follow.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserExportDto } from './dto/user-export.dto';
-import { UserPublicProfileDto } from './user.types';
+import { UserPublicProfileDto, UserSearchResultDto } from './user.types';
 import { SuggestionDto } from '../follow/follow.types';
 
 @ApiTags('users')
@@ -51,6 +52,13 @@ export class UserController {
     @Req() req: { user: { id: string } },
   ): Promise<SuggestionDto[]> {
     return this.followService.getSuggestions(req.user.id);
+  }
+
+  @Get('search')
+  @Public()
+  @ApiOperation({ summary: 'Rechercher des utilisateurs par pseudo' })
+  searchUsers(@Query('q') q = ''): Promise<UserSearchResultDto[]> {
+    return this.userService.search(q);
   }
 
   @Get(':id')
