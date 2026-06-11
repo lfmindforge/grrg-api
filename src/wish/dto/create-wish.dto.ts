@@ -1,4 +1,4 @@
-import { IsBoolean, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -23,4 +23,9 @@ export class CreateWishDto {
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   is_private?: boolean;
+
+  @ApiPropertyOptional({ example: '2026-12-31T23:59:59.000Z' })
+  @IsOptional()
+  @IsDateString()
+  expires_at?: string;
 }

@@ -22,6 +22,7 @@ export interface WishPublicDto {
   is_private: boolean;
   media_urls: string[];
   status: WishStatus;
+  expires_at: Date | null;
   created_at: Date;
   updated_at: Date;
   user: UserPublicDto;
