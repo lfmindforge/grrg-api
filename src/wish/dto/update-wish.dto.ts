@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsOptional, IsString, MaxLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class UpdateWishDto {
@@ -21,4 +21,8 @@ export class UpdateWishDto {
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   is_private?: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  expires_at?: string | null;
 }

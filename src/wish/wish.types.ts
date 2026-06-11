@@ -9,4 +9,5 @@ export enum WishStatus {
   IN_PROGRESS = 'in_progress',
   FULFILLED = 'fulfilled',
   CANCELLED = 'cancelled',
+  EXPIRED = 'expired',
 }

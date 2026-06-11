@@ -34,14 +34,15 @@ export class WishService {
       .leftJoinAndSelect('wish.user', 'user')
       .where('wish.is_private = :isPrivate', { isPrivate: false });
 
-    // Exclut les souhaits annulés par défaut sauf si status explicite
+    // Exclut les souhaits annulés et expirés par défaut sauf si status explicite
     if (query.status) {
       qb.andWhere('wish.status = :status', { status: query.status });
     } else {
-      qb.andWhere('wish.status != :cancelled', {
-        cancelled: WishStatus.CANCELLED,
-      });
+      qb.andWhere('wish.status != :cancelled', { cancelled: WishStatus.CANCELLED });
+      qb.andWhere('wish.status != :expired', { expired: WishStatus.EXPIRED });
     }
+    // Double sécurité entre deux passages du cron
+    qb.andWhere('(wish.expires_at IS NULL OR wish.expires_at > :now)', { now: new Date() });
 
     if (query.category) {
       qb.andWhere('LOWER(wish.category) = LOWER(:category)', {
@@ -127,6 +128,8 @@ export class WishService {
         id,
         isPrivate: false,
       })
+      .andWhere('wish.status != :expired', { expired: WishStatus.EXPIRED })
+      .andWhere('(wish.expires_at IS NULL OR wish.expires_at > :now)', { now: new Date() })
       .getRawAndEntities();
 
     if (!entities[0]) {
@@ -190,6 +193,10 @@ export class WishService {
       const url = await this.supabaseStorage.upload(bucket, path, file);
       wish.media_urls = [url];
       updatedFields.push('media_urls');
+    }
+
+    if (dto.expires_at !== undefined) {
+      wish.expires_at = dto.expires_at ? new Date(dto.expires_at) : null;
     }
 
     const saved = await this.wishRepo.save(wish);
@@ -257,6 +264,7 @@ export class WishService {
       is_private: dto.is_private ?? false,
       media_urls: mediaUrls,
       status: WishStatus.PENDING,
+      expires_at: dto.expires_at ? new Date(dto.expires_at) : null,
     });
 
     const saved = await this.wishRepo.save(wish);
