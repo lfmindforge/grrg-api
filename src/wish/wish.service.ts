@@ -42,7 +42,7 @@ export class WishService {
       qb.andWhere('wish.status != :expired', { expired: WishStatus.EXPIRED });
     }
     // Double sécurité entre deux passages du cron
-    qb.andWhere('(wish.expires_at IS NULL OR wish.expires_at > NOW())');
+    qb.andWhere('(wish.expires_at IS NULL OR wish.expires_at > :now)', { now: new Date() });
 
     if (query.category) {
       qb.andWhere('LOWER(wish.category) = LOWER(:category)', {
@@ -129,7 +129,7 @@ export class WishService {
         isPrivate: false,
       })
       .andWhere('wish.status != :expired', { expired: WishStatus.EXPIRED })
-      .andWhere('(wish.expires_at IS NULL OR wish.expires_at > NOW())')
+      .andWhere('(wish.expires_at IS NULL OR wish.expires_at > :now)', { now: new Date() })
       .getRawAndEntities();
 
     if (!entities[0]) {
