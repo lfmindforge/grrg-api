@@ -332,6 +332,37 @@ describe('WishService', () => {
         expect.objectContaining({ is_private: true }),
       );
     });
+
+    it('avec expires_at : passe la date convertie en Date à l\'entité', async () => {
+      const dto: CreateWishDto = {
+        title: 'Test',
+        description: 'Desc',
+        category: 'cat',
+        expires_at: '2026-12-31T23:59:59.000Z',
+      };
+      const savedWish = { id: 'w1', user_id: 'u1', expires_at: new Date(dto.expires_at!) };
+      wishRepo.create.mockReturnValue(savedWish);
+      wishRepo.save.mockResolvedValue(savedWish);
+
+      await service.create('u1', dto, []);
+
+      expect(wishRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ expires_at: new Date('2026-12-31T23:59:59.000Z') }),
+      );
+    });
+
+    it('sans expires_at : passe null à l\'entité', async () => {
+      const dto: CreateWishDto = { title: 'Test', description: 'Desc', category: 'cat' };
+      const savedWish = { id: 'w1', user_id: 'u1', expires_at: null };
+      wishRepo.create.mockReturnValue(savedWish);
+      wishRepo.save.mockResolvedValue(savedWish);
+
+      await service.create('u1', dto, []);
+
+      expect(wishRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ expires_at: null }),
+      );
+    });
   });
 
   // --- findMine() ---
