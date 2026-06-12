@@ -78,8 +78,8 @@ export class ReportService {
     const wishIds    = reports.filter(r => r.target_type === ReportTargetType.WISH).map(r => r.target_id);
     const commentIds = reports.filter(r => r.target_type === ReportTargetType.COMMENT).map(r => r.target_id);
 
-    const wishes   = wishIds.length    ? await this.wishRepo.find({ where: { id: In(wishIds) } })    : [];
-    const comments = commentIds.length ? await this.commentRepo.find({ where: { id: In(commentIds) } }) : [];
+    const wishes   = wishIds.length    ? await this.wishRepo.find({ where: { id: In(wishIds) }, withDeleted: true })    : [];
+    const comments = commentIds.length ? await this.commentRepo.find({ where: { id: In(commentIds) }, withDeleted: true }) : [];
 
     const ownerIds = [...new Set([...wishes.map(w => w.user_id), ...comments.map(c => c.user_id)])];
     const owners   = ownerIds.length
@@ -97,15 +97,22 @@ export class ReportService {
       const author = ownerId ? (ownerMap.get(ownerId) ?? null) : null;
 
       let targetPreview: ReportResponseDto['target_preview'] = null;
+      let isContentDeleted = false;
       if (r.target_type === ReportTargetType.WISH) {
         const w = wishMap.get(r.target_id);
-        if (w) targetPreview = { title: w.title, description: w.description };
+        if (w) {
+          targetPreview = { title: w.title, description: w.description };
+          isContentDeleted = !!w.deleted_at;
+        }
       } else {
         const c = commentMap.get(r.target_id);
-        if (c) targetPreview = { content: c.content };
+        if (c) {
+          targetPreview = { content: c.content };
+          isContentDeleted = !!c.deleted_at;
+        }
       }
 
-      return this.toDto(r, author ? { id: author.id, pseudo: author.pseudo } : null, targetPreview);
+      return this.toDto(r, author ? { id: author.id, pseudo: author.pseudo } : null, targetPreview, isContentDeleted);
     });
 
     return { data, total, page, limit };
@@ -126,6 +133,7 @@ export class ReportService {
     report: Report,
     contentAuthor: { id: string; pseudo: string } | null,
     targetPreview: ReportResponseDto['target_preview'] = null,
+    isContentDeleted = false,
   ): ReportResponseDto {
     return {
       id: report.id,
@@ -135,6 +143,7 @@ export class ReportService {
       reason: report.reason,
       details: report.details,
       target_preview: targetPreview,
+      is_content_deleted: isContentDeleted,
       content_author: contentAuthor,
       created_at: report.created_at,
     };
