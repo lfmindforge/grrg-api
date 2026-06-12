@@ -23,6 +23,7 @@ import { BadgeModule } from './badge/badge.module';
 import { EventLogModule } from './event-log/event-log.module';
 import { HealthModule } from './health/health.module';
 import { ReportModule } from './report/report.module';
+import { AdminModule } from './admin/admin.module';
 import KeyvRedis from '@keyv/redis';
 
 @Module({
@@ -95,6 +96,7 @@ import KeyvRedis from '@keyv/redis';
     CommentModule,
     ReactionModule,
     ReportModule,
+    AdminModule,
   ],
   //Application throttleGuard sur toutes les routes
   providers: [
