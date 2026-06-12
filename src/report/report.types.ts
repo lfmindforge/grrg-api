@@ -7,6 +7,9 @@ export interface ReportResponseDto {
   target_id: string;
   reason: ReportReason;
   details: string | null;
+  target_preview: { title?: string; description?: string; content?: string } | null;
+  is_content_deleted: boolean;
+  content_author: { id: string; pseudo: string } | null;
   created_at: Date;
 }
 

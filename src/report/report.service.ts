@@ -1,9 +1,10 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Report, ReportTargetType } from './report.entity';
 import { Wish } from '../wish/wish.entity';
 import { Comment } from '../comment/comment.entity';
+import { User } from '../user/user.entity';
 import { CreateReportDto } from './dto/create-report.dto';
 import { QueryReportsDto } from './dto/query-reports.dto';
 import { PaginatedReportsDto, ReportResponseDto } from './report.types';
@@ -19,6 +20,8 @@ export class ReportService {
     private readonly wishRepo: Repository<Wish>,
     @InjectRepository(Comment)
     private readonly commentRepo: Repository<Comment>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly eventService: EventLogService,
   ) {}
 
@@ -52,11 +55,11 @@ export class ReportService {
       { target_type: dto.target_type, target_id: dto.target_id, reason: dto.reason },
     );
 
-    return this.toDto(saved);
+    return this.toDto(saved, null);
   }
 
   async getReports(dto: QueryReportsDto): Promise<PaginatedReportsDto> {
-    const page = dto.page ?? 1;
+    const page  = dto.page  ?? 1;
     const limit = dto.limit ?? 20;
 
     const qb = this.reportRepo
@@ -69,9 +72,50 @@ export class ReportService {
       qb.where('report.target_type = :type', { type: dto.target_type });
     }
 
-    const [data, total] = await qb.getManyAndCount();
+    const [reports, total] = await qb.getManyAndCount();
 
-    return { data: data.map((r) => this.toDto(r)), total, page, limit };
+    // Résolution des auteurs en batch pour éviter le N+1
+    const wishIds    = reports.filter(r => r.target_type === ReportTargetType.WISH).map(r => r.target_id);
+    const commentIds = reports.filter(r => r.target_type === ReportTargetType.COMMENT).map(r => r.target_id);
+
+    const wishes   = wishIds.length    ? await this.wishRepo.find({ where: { id: In(wishIds) }, withDeleted: true })    : [];
+    const comments = commentIds.length ? await this.commentRepo.find({ where: { id: In(commentIds) }, withDeleted: true }) : [];
+
+    const ownerIds = [...new Set([...wishes.map(w => w.user_id), ...comments.map(c => c.user_id)])];
+    const owners   = ownerIds.length
+      ? await this.userRepo.find({ where: { id: In(ownerIds) }, select: ['id', 'pseudo'] })
+      : [];
+
+    const ownerMap  = new Map(owners.map(u => [u.id, u]));
+    const wishMap   = new Map(wishes.map(w => [w.id, w]));
+    const commentMap = new Map(comments.map(c => [c.id, c]));
+
+    const data = reports.map(r => {
+      const ownerId = r.target_type === ReportTargetType.WISH
+        ? wishMap.get(r.target_id)?.user_id
+        : commentMap.get(r.target_id)?.user_id;
+      const author = ownerId ? (ownerMap.get(ownerId) ?? null) : null;
+
+      let targetPreview: ReportResponseDto['target_preview'] = null;
+      let isContentDeleted = false;
+      if (r.target_type === ReportTargetType.WISH) {
+        const w = wishMap.get(r.target_id);
+        if (w) {
+          targetPreview = { title: w.title, description: w.description };
+          isContentDeleted = !!w.deleted_at;
+        }
+      } else {
+        const c = commentMap.get(r.target_id);
+        if (c) {
+          targetPreview = { content: c.content };
+          isContentDeleted = !!c.deleted_at;
+        }
+      }
+
+      return this.toDto(r, author ? { id: author.id, pseudo: author.pseudo } : null, targetPreview, isContentDeleted);
+    });
+
+    return { data, total, page, limit };
   }
 
   private async getTargetOwnerId(targetType: ReportTargetType, targetId: string): Promise<string> {
@@ -85,7 +129,12 @@ export class ReportService {
     return comment.user_id;
   }
 
-  private toDto(report: Report): ReportResponseDto {
+  private toDto(
+    report: Report,
+    contentAuthor: { id: string; pseudo: string } | null,
+    targetPreview: ReportResponseDto['target_preview'] = null,
+    isContentDeleted = false,
+  ): ReportResponseDto {
     return {
       id: report.id,
       reporter_id: report.reporter_id,
@@ -93,6 +142,9 @@ export class ReportService {
       target_id: report.target_id,
       reason: report.reason,
       details: report.details,
+      target_preview: targetPreview,
+      is_content_deleted: isContentDeleted,
+      content_author: contentAuthor,
       created_at: report.created_at,
     };
   }

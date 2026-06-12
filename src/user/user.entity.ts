@@ -41,6 +41,9 @@ export class User {
   @Column({ type: 'varchar', length: 10, default: 'user' })
   role!: 'user' | 'admin';
 
+  @Column({ type: 'timestamptz', nullable: true, default: null })
+  banned_until!: Date | null;
+
   @CreateDateColumn()
   created_at!: Date;
 
