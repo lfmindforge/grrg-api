@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsISO8601, IsOptional, IsUUID, Min } from 'class-validator';
+import { IsEnum, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { EventType } from '../event-log.types';
@@ -9,10 +9,11 @@ export class QueryEventLogDto {
   @IsEnum(EventType)
   type?: EventType;
 
-  @ApiPropertyOptional({ format: 'uuid', description: 'Filtrer par acteur (utilisateur)' })
+  @ApiPropertyOptional({ description: 'Filtrer par pseudo de l\'acteur' })
   @IsOptional()
-  @IsUUID()
-  actor_id?: string;
+  @IsString()
+  @MaxLength(50)
+  pseudo?: string;
 
   @ApiPropertyOptional({ example: '2026-01-01', description: 'Date de début (ISO8601)' })
   @IsOptional()

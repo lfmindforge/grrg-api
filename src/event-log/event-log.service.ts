@@ -47,10 +47,10 @@ export class EventLogService {
       .createQueryBuilder('el')
       .orderBy('el.created_at', 'DESC');
 
-    if (query.type)     qb.andWhere('el.type     = :type',     { type:     query.type });
-    if (query.actor_id) qb.andWhere('el.actor_id = :actor_id', { actor_id: query.actor_id });
-    if (query.from)     qb.andWhere('el.created_at >= :from',  { from:     new Date(query.from) });
-    if (query.to)       qb.andWhere('el.created_at <= :to',    { to:       new Date(query.to) });
+    if (query.type)   qb.andWhere('el.type = :type', { type: query.type });
+    if (query.pseudo) qb.andWhere(`el.payload->'triggered_by'->>'pseudo' ILIKE :pseudo`, { pseudo: `%${query.pseudo}%` });
+    if (query.from)   qb.andWhere('el.created_at >= :from', { from: new Date(query.from) });
+    if (query.to)     qb.andWhere('el.created_at <= :to',   { to:   new Date(query.to) });
 
     const total = await qb.getCount();
     const data  = await qb.skip((page - 1) * limit).take(limit).getMany();
