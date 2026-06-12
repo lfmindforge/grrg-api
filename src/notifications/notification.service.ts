@@ -7,6 +7,7 @@ import { NotificationType } from './notification.types';
 import { User } from '../user/user.entity';
 import { MailService } from '../mail/mail.service';
 import { buildEmailTemplate } from '../mail/mail.templates';
+import { UserSettingsService } from '../user-settings/user-settings.service';
 
 @Injectable()
 export class NotificationService {
@@ -18,6 +19,7 @@ export class NotificationService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     private readonly mailService: MailService,
+    private readonly userSettingsService: UserSettingsService,
   ) {}
 
   async create(userId: string, type: string, payload: Record<string, unknown>): Promise<Notification> {
@@ -32,12 +34,15 @@ export class NotificationService {
 
     const template = buildEmailTemplate(type, payload);
     if (template) {
-      const user = await this.userRepo.findOne({ where: { id: userId }, select: ['email'] });
-      if (user?.email) {
-        try {
-          await this.mailService.sendMail(user.email, template.subject, template.html);
-        } catch {
-          // L'email est non-bloquant — la notification SSE est déjà envoyée
+      const canEmail = await this.userSettingsService.isNotifEmailEnabled(userId, type as string);
+      if (canEmail) {
+        const user = await this.userRepo.findOne({ where: { id: userId }, select: ['email'] });
+        if (user?.email) {
+          try {
+            await this.mailService.sendMail(user.email, template.subject, template.html);
+          } catch {
+            // L'email est non-bloquant — la notification SSE est déjà envoyée
+          }
         }
       }
     }

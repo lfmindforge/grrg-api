@@ -2,6 +2,7 @@ import { Subject } from 'rxjs';
 import { NotificationService } from './notification.service';
 import { NotificationType } from './notification.types';
 import { MailService } from '../mail/mail.service';
+import { UserSettingsService } from '../user-settings/user-settings.service';
 
 describe('NotificationService', () => {
   let service: NotificationService;
@@ -21,12 +22,18 @@ describe('NotificationService', () => {
     sendMail: jest.fn().mockResolvedValue(undefined),
   };
 
+  const mockUserSettingsService: jest.Mocked<Pick<UserSettingsService, 'isNotifEmailEnabled'>> = {
+    isNotifEmailEnabled: jest.fn().mockResolvedValue(true),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUserSettingsService.isNotifEmailEnabled.mockResolvedValue(true);
     service = new NotificationService(
       mockRepo as any,
       mockUserRepo as any,
       mockMailService as any,
+      mockUserSettingsService as any,
     );
   });
 
@@ -157,6 +164,38 @@ describe('NotificationService', () => {
       { user_id: 'u1', is_read: false },
       { is_read: true },
     );
+  });
+
+  it("notify() ne pas envoyer de mail si isNotifEmailEnabled retourne false", async () => {
+    mockUserSettingsService.isNotifEmailEnabled.mockResolvedValue(false);
+    const notif = { id: 'n1', user_id: 'u1', type: 'donation_received', payload: {}, is_read: false, created_at: new Date() };
+    mockRepo.create.mockReturnValue(notif);
+    mockRepo.save.mockResolvedValue(notif);
+    mockUserRepo.findOne.mockResolvedValue({ email: 'test@example.com' });
+
+    await service.notify('u1', NotificationType.DONATION_RECEIVED, {
+      wish_title: 'Vélo',
+      donor_pseudo: 'bob',
+      is_anonymous: false,
+    });
+
+    expect(mockMailService.sendMail).not.toHaveBeenCalled();
+  });
+
+  it("notify() envoie le mail si isNotifEmailEnabled retourne true", async () => {
+    mockUserSettingsService.isNotifEmailEnabled.mockResolvedValue(true);
+    const notif = { id: 'n1', user_id: 'u1', type: 'donation_received', payload: {}, is_read: false, created_at: new Date() };
+    mockRepo.create.mockReturnValue(notif);
+    mockRepo.save.mockResolvedValue(notif);
+    mockUserRepo.findOne.mockResolvedValue({ email: 'test@example.com' });
+
+    await service.notify('u1', NotificationType.DONATION_RECEIVED, {
+      wish_title: 'Vélo',
+      donor_pseudo: 'bob',
+      is_anonymous: false,
+    });
+
+    expect(mockMailService.sendMail).toHaveBeenCalled();
   });
 
   it('removeClient() complète le subject et le retire du registre', () => {
