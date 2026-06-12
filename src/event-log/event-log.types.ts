@@ -27,4 +27,6 @@ export enum EventType {
   REACTION_DELETE = 'reaction.delete',
 
   BADGE_AWARD = 'badge.award',
+
+  REPORT_CREATE = 'report.create',
 }
