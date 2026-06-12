@@ -4,7 +4,6 @@ import { ReportService } from './report.service';
 import { CreateReportDto } from './dto/create-report.dto';
 import { QueryReportsDto } from './dto/query-reports.dto';
 import { Roles } from '../common/decorators/roles.decorator';
-import { Role } from '../user/user.types';
 
 @ApiTags('reports')
 @ApiBearerAuth()
@@ -19,7 +18,7 @@ export class ReportController {
   }
 
   @Get()
-  @Roles(Role.ADMIN)
+  @Roles('admin')
   findAll(@Query() dto: QueryReportsDto) {
     return this.reportService.getReports(dto);
   }
