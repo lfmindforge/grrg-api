@@ -75,3 +75,36 @@ function wishExpired(payload: Record<string, unknown>): MailTemplate {
     `,
   };
 }
+
+export function buildBanTemplate(payload: {
+  pseudo: string;
+  reason: string;
+  bannedUntil: Date;
+}): MailTemplate {
+  const isPermanent = new Date(payload.bannedUntil).getFullYear() >= 9999;
+  const banType = isPermanent
+    ? 'définitivement'
+    : `temporairement jusqu'au ${new Date(payload.bannedUntil).toLocaleDateString('fr-FR')}`;
+
+  return {
+    subject: `Gift Rumble — Votre compte a été suspendu`,
+    html: `
+      <h2>Votre compte a été suspendu</h2>
+      <p>Bonjour <strong>${payload.pseudo}</strong>,</p>
+      <p>Votre compte Gift Rumble a été suspendu <strong>${banType}</strong>.</p>
+      <p><strong>Raison :</strong> ${payload.reason}</p>
+      <p>Si vous pensez qu'il s'agit d'une erreur, contactez l'équipe de modération.</p>
+    `,
+  };
+}
+
+export function buildUnbanTemplate(payload: { pseudo: string }): MailTemplate {
+  return {
+    subject: `Gift Rumble — Votre compte a été rétabli`,
+    html: `
+      <h2>Votre compte a été rétabli</h2>
+      <p>Bonjour <strong>${payload.pseudo}</strong>,</p>
+      <p>La suspension de votre compte Gift Rumble a été levée. Vous pouvez vous reconnecter normalement.</p>
+    `,
+  };
+}

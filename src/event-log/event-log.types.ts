@@ -29,4 +29,8 @@ export enum EventType {
   BADGE_AWARD = 'badge.award',
 
   REPORT_CREATE = 'report.create',
+
+  ADMIN_BAN            = 'admin.ban',
+  ADMIN_UNBAN          = 'admin.unban',
+  ADMIN_CONTENT_DELETE = 'admin.content_delete',
 }
