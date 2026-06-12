@@ -17,7 +17,7 @@ export class UserSettingsService {
 
   async set(userId: string, key: string, value: unknown): Promise<void> {
     await this.repo.upsert(
-      { user_id: userId, key, value },
+      { user_id: userId, key, value } as any,
       { conflictPaths: ['user_id', 'key'] },
     );
   }
