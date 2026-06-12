@@ -7,6 +7,7 @@ export interface ReportResponseDto {
   target_id: string;
   reason: ReportReason;
   details: string | null;
+  content_author: { id: string; pseudo: string } | null;
   created_at: Date;
 }
 
