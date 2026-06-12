@@ -4,6 +4,7 @@ import { ConflictException, ForbiddenException, NotFoundException } from '@nestj
 import { Report, ReportReason, ReportTargetType } from './report.entity';
 import { Wish } from '../wish/wish.entity';
 import { Comment } from '../comment/comment.entity';
+import { User } from '../user/user.entity';
 import { ReportService } from './report.service';
 import { EventLogService } from '../event-log/event-log.service';
 import { EventType } from '../event-log/event-log.types';
@@ -23,8 +24,9 @@ const mockReportRepo = {
   save: jest.fn(),
 };
 
-const mockWishRepo  = { findOne: jest.fn() };
-const mockCommentRepo = { findOne: jest.fn() };
+const mockWishRepo    = { findOne: jest.fn(), find: jest.fn() };
+const mockCommentRepo = { findOne: jest.fn(), find: jest.fn() };
+const mockUserRepo    = { find: jest.fn() };
 const mockEventService = { log: jest.fn().mockResolvedValue(undefined) };
 
 const REPORTER_ID = 'reporter-uuid';
@@ -45,6 +47,7 @@ describe('ReportService', () => {
         { provide: getRepositoryToken(Report),  useValue: mockReportRepo },
         { provide: getRepositoryToken(Wish),    useValue: mockWishRepo },
         { provide: getRepositoryToken(Comment), useValue: mockCommentRepo },
+        { provide: getRepositoryToken(User),    useValue: mockUserRepo },
         { provide: EventLogService,             useValue: mockEventService },
       ],
     }).compile();
@@ -72,6 +75,7 @@ describe('ReportService', () => {
 
       expect(result.id).toBe('r-1');
       expect(result.target_type).toBe(ReportTargetType.WISH);
+      expect(result.content_author).toBeNull();
     });
 
     it('crée un signalement pour un commentaire valide', async () => {
@@ -196,16 +200,35 @@ describe('ReportService', () => {
     it('retourne une liste paginée sans filtre', async () => {
       const report = { id: 'r-1', reporter_id: REPORTER_ID, target_type: ReportTargetType.WISH, target_id: WISH_ID, reason: ReportReason.SPAM, details: null, created_at: new Date() };
       mockQb.getManyAndCount.mockResolvedValue([[report], 1]);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockCommentRepo.find.mockResolvedValue([]);
+      mockUserRepo.find.mockResolvedValue([]);
 
       const result = await service.getReports({});
 
       expect(result.total).toBe(1);
       expect(result.data[0].id).toBe('r-1');
+      expect(result.data[0].content_author).toBeNull();
       expect(mockQb.where).not.toHaveBeenCalled();
+    });
+
+    it('résout content_author depuis les entités liées', async () => {
+      const report = { id: 'r-1', reporter_id: REPORTER_ID, target_type: ReportTargetType.WISH, target_id: WISH_ID, reason: ReportReason.SPAM, details: null, created_at: new Date() };
+      mockQb.getManyAndCount.mockResolvedValue([[report], 1]);
+      mockWishRepo.find.mockResolvedValue([{ id: WISH_ID, user_id: OWNER_ID }]);
+      mockCommentRepo.find.mockResolvedValue([]);
+      mockUserRepo.find.mockResolvedValue([{ id: OWNER_ID, pseudo: 'alice' }]);
+
+      const result = await service.getReports({});
+
+      expect(result.data[0].content_author).toEqual({ id: OWNER_ID, pseudo: 'alice' });
     });
 
     it('applique le filtre target_type=wish', async () => {
       mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockCommentRepo.find.mockResolvedValue([]);
+      mockUserRepo.find.mockResolvedValue([]);
 
       await service.getReports({ target_type: ReportTargetType.WISH });
 
@@ -214,6 +237,9 @@ describe('ReportService', () => {
 
     it('respecte la pagination page=2 limit=5', async () => {
       mockQb.getManyAndCount.mockResolvedValue([[], 0]);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockCommentRepo.find.mockResolvedValue([]);
+      mockUserRepo.find.mockResolvedValue([]);
 
       const result = await service.getReports({ page: 2, limit: 5 });
 
