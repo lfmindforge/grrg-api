@@ -95,7 +95,17 @@ export class ReportService {
         ? wishMap.get(r.target_id)?.user_id
         : commentMap.get(r.target_id)?.user_id;
       const author = ownerId ? (ownerMap.get(ownerId) ?? null) : null;
-      return this.toDto(r, author ? { id: author.id, pseudo: author.pseudo } : null);
+
+      let targetPreview: ReportResponseDto['target_preview'] = null;
+      if (r.target_type === ReportTargetType.WISH) {
+        const w = wishMap.get(r.target_id);
+        if (w) targetPreview = { title: w.title, description: w.description };
+      } else {
+        const c = commentMap.get(r.target_id);
+        if (c) targetPreview = { content: c.content };
+      }
+
+      return this.toDto(r, author ? { id: author.id, pseudo: author.pseudo } : null, targetPreview);
     });
 
     return { data, total, page, limit };
@@ -112,7 +122,11 @@ export class ReportService {
     return comment.user_id;
   }
 
-  private toDto(report: Report, contentAuthor: { id: string; pseudo: string } | null): ReportResponseDto {
+  private toDto(
+    report: Report,
+    contentAuthor: { id: string; pseudo: string } | null,
+    targetPreview: ReportResponseDto['target_preview'] = null,
+  ): ReportResponseDto {
     return {
       id: report.id,
       reporter_id: report.reporter_id,
@@ -120,6 +134,7 @@ export class ReportService {
       target_id: report.target_id,
       reason: report.reason,
       details: report.details,
+      target_preview: targetPreview,
       content_author: contentAuthor,
       created_at: report.created_at,
     };
