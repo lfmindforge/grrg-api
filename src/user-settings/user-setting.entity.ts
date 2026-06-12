@@ -1,8 +1,8 @@
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { User } from '../user/user.entity';
 
-@Entity('user_notification_preferences')
-export class NotificationPreference {
+@Entity('user_settings')
+export class UserSetting {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
@@ -13,9 +13,9 @@ export class NotificationPreference {
   @JoinColumn({ name: 'user_id' })
   user!: User;
 
-  @Column({ length: 50 })
-  event_type!: string;
+  @Column({ length: 100 })
+  key!: string;
 
-  @Column({ default: true })
-  email_enabled!: boolean;
+  @Column({ type: 'jsonb', default: true })
+  value!: unknown;
 }
