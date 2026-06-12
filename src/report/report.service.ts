@@ -46,11 +46,11 @@ export class ReportService {
 
     const saved = await this.reportRepo.save(report);
 
-    await this.eventService.log({
-      user_id: reporterId,
-      type: EventType.REPORT_CREATE,
-      metadata: { target_type: dto.target_type, target_id: dto.target_id, reason: dto.reason },
-    });
+    await this.eventService.log(
+      EventType.REPORT_CREATE,
+      reporterId,
+      { target_type: dto.target_type, target_id: dto.target_id, reason: dto.reason },
+    );
 
     return this.toDto(saved);
   }
