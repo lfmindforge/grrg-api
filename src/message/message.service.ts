@@ -97,7 +97,7 @@ export class MessageService {
 
       result.push({
         id: conv.id,
-        other_user: { id: otherUser.id, pseudo: otherUser.pseudo, avatar_url: otherUser.avatar_url },
+        other_user: { id: otherUser.id, pseudo: otherUser.pseudo, avatar_url: otherUser.avatar_url, grade: otherUser.grade },
         last_message: lastMsg ? this.toMessageDto(lastMsg, lastMsg.sender) : null,
         unread_count: unreadCount,
         updated_at: lastMsg?.created_at ?? conv.created_at,

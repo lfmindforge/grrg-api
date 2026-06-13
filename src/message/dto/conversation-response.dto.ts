@@ -11,7 +11,7 @@ export class MessageResponseDto {
 
 export class ConversationResponseDto {
   id!: string;
-  other_user!: { id: string; pseudo: string; avatar_url: string | null };
+  other_user!: { id: string; pseudo: string; avatar_url: string | null; grade: string };
   last_message!: MessageResponseDto | null;
   unread_count!: number;
   updated_at!: Date;
