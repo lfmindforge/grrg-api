@@ -6,6 +6,7 @@ import { Message } from './message.entity';
 import { User } from '../user/user.entity';
 import { MessageService } from './message.service';
 import { MessageController } from './message.controller';
+import { MessagingGateway } from './messaging.gateway';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EventLogModule } from '../event-log/event-log.module';
 
@@ -17,7 +18,7 @@ import { EventLogModule } from '../event-log/event-log.module';
     JwtModule.register({}),
   ],
   controllers: [MessageController],
-  providers: [MessageService],
+  providers: [MessageService, MessagingGateway],
   exports: [MessageService],
 })
 export class MessageModule {}
