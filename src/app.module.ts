@@ -25,6 +25,7 @@ import { HealthModule } from './health/health.module';
 import { ReportModule } from './report/report.module';
 import { AdminModule } from './admin/admin.module';
 import { UserSettingsModule } from './user-settings/user-settings.module';
+import { MessageModule } from './message/message.module';
 import KeyvRedis from '@keyv/redis';
 
 @Module({
@@ -99,6 +100,7 @@ import KeyvRedis from '@keyv/redis';
     ReportModule,
     AdminModule,
     UserSettingsModule,
+    MessageModule,
   ],
   //Application throttleGuard sur toutes les routes
   providers: [
