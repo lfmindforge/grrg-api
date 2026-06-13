@@ -15,6 +15,8 @@ export function buildEmailTemplate(
       return gradeUp(payload);
     case NotificationType.WISH_EXPIRED:
       return wishExpired(payload);
+    case NotificationType.MESSAGE_RECEIVED:
+      return messageReceived(payload);
     default:
       return null;
   }
@@ -72,6 +74,22 @@ function wishExpired(payload: Record<string, unknown>): MailTemplate {
       <h2>Votre souhait a expiré</h2>
       <p>Votre souhait <em>«${wishTitle}»</em> a dépassé sa date d'expiration.</p>
       <p>Si votre besoin est toujours d'actualité, mettez à jour la date ou créez un nouveau souhait.</p>
+    `,
+  };
+}
+
+function messageReceived(payload: Record<string, unknown>): MailTemplate {
+  const senderPseudo = (payload['sender_pseudo'] as string) ?? 'Quelqu\'un';
+  const preview = (payload['content_preview'] as string) ?? '';
+  const frontendUrl = process.env.FRONTEND_URL ?? '';
+
+  return {
+    subject: `Gift Rumble — Nouveau message de ${senderPseudo}`,
+    html: `
+      <h2>Vous avez reçu un message !</h2>
+      <p><strong>${senderPseudo}</strong> vous a envoyé un message :</p>
+      <blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#555">${preview}</blockquote>
+      <p><a href="${frontendUrl}/messages">Voir le message</a></p>
     `,
   };
 }
