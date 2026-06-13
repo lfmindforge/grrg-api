@@ -33,4 +33,6 @@ export enum EventType {
   ADMIN_BAN            = 'admin.ban',
   ADMIN_UNBAN          = 'admin.unban',
   ADMIN_CONTENT_DELETE = 'admin.content_delete',
+
+  MESSAGE_SEND = 'message.send',
 }

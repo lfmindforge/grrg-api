@@ -5,6 +5,7 @@ import { Report, ReportReason, ReportTargetType } from './report.entity';
 import { Wish } from '../wish/wish.entity';
 import { Comment } from '../comment/comment.entity';
 import { User } from '../user/user.entity';
+import { Message } from '../message/message.entity';
 import { ReportService } from './report.service';
 import { EventLogService } from '../event-log/event-log.service';
 import { EventType } from '../event-log/event-log.types';
@@ -26,6 +27,7 @@ const mockReportRepo = {
 
 const mockWishRepo    = { findOne: jest.fn(), find: jest.fn() };
 const mockCommentRepo = { findOne: jest.fn(), find: jest.fn() };
+const mockMessageRepo = { findOne: jest.fn(), find: jest.fn() };
 const mockUserRepo    = { find: jest.fn() };
 const mockEventService = { log: jest.fn().mockResolvedValue(undefined) };
 
@@ -44,9 +46,10 @@ describe('ReportService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReportService,
-        { provide: getRepositoryToken(Report),  useValue: mockReportRepo },
+        { provide: getRepositoryToken(Report),   useValue: mockReportRepo },
         { provide: getRepositoryToken(Wish),    useValue: mockWishRepo },
         { provide: getRepositoryToken(Comment), useValue: mockCommentRepo },
+        { provide: getRepositoryToken(Message), useValue: mockMessageRepo },
         { provide: getRepositoryToken(User),    useValue: mockUserRepo },
         { provide: EventLogService,             useValue: mockEventService },
       ],
@@ -202,6 +205,7 @@ describe('ReportService', () => {
       mockQb.getManyAndCount.mockResolvedValue([[report], 1]);
       mockWishRepo.find.mockResolvedValue([]);
       mockCommentRepo.find.mockResolvedValue([]);
+      mockMessageRepo.find.mockResolvedValue([]);
       mockUserRepo.find.mockResolvedValue([]);
 
       const result = await service.getReports({});
@@ -217,6 +221,7 @@ describe('ReportService', () => {
       mockQb.getManyAndCount.mockResolvedValue([[report], 1]);
       mockWishRepo.find.mockResolvedValue([{ id: WISH_ID, user_id: OWNER_ID }]);
       mockCommentRepo.find.mockResolvedValue([]);
+      mockMessageRepo.find.mockResolvedValue([]);
       mockUserRepo.find.mockResolvedValue([{ id: OWNER_ID, pseudo: 'alice' }]);
 
       const result = await service.getReports({});
@@ -228,6 +233,7 @@ describe('ReportService', () => {
       mockQb.getManyAndCount.mockResolvedValue([[], 0]);
       mockWishRepo.find.mockResolvedValue([]);
       mockCommentRepo.find.mockResolvedValue([]);
+      mockMessageRepo.find.mockResolvedValue([]);
       mockUserRepo.find.mockResolvedValue([]);
 
       await service.getReports({ target_type: ReportTargetType.WISH });
@@ -239,6 +245,7 @@ describe('ReportService', () => {
       mockQb.getManyAndCount.mockResolvedValue([[], 0]);
       mockWishRepo.find.mockResolvedValue([]);
       mockCommentRepo.find.mockResolvedValue([]);
+      mockMessageRepo.find.mockResolvedValue([]);
       mockUserRepo.find.mockResolvedValue([]);
 
       const result = await service.getReports({ page: 2, limit: 5 });

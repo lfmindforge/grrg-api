@@ -4,6 +4,7 @@ import { User } from '../user/user.entity';
 export enum ReportTargetType {
   WISH    = 'wish',
   COMMENT = 'comment',
+  MESSAGE = 'message',
 }
 
 export enum ReportReason {
