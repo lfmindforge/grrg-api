@@ -4,12 +4,13 @@ import { Report } from './report.entity';
 import { Wish } from '../wish/wish.entity';
 import { Comment } from '../comment/comment.entity';
 import { User } from '../user/user.entity';
+import { Message } from '../message/message.entity';
 import { ReportService } from './report.service';
 import { ReportController } from './report.controller';
 import { EventLogModule } from '../event-log/event-log.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Report, Wish, Comment, User]), EventLogModule],
+  imports: [TypeOrmModule.forFeature([Report, Wish, Comment, User, Message]), EventLogModule],
   controllers: [ReportController],
   providers: [ReportService],
   exports: [ReportService],
