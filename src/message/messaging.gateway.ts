@@ -9,7 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
-import { MessageService } from './message.service';
+import { ConfigService } from '@nestjs/config';
 
 // Séparé de l'API REST sur /messaging pour éviter les conflits de namespace
 @WebSocketGateway({ namespace: '/messaging', cors: { origin: process.env.CORS_ORIGIN, credentials: true } })
@@ -22,7 +22,7 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   constructor(
     private readonly jwtService: JwtService,
-    private readonly messageService: MessageService,
+    private readonly config: ConfigService,
   ) {}
 
   handleConnection(client: Socket): void {
@@ -32,7 +32,10 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
         client.disconnect();
         return;
       }
-      const payload = this.jwtService.verify<{ sub: string }>(token);
+      // JWT_SECRET doit être passé explicitement — JwtModule.register({}) ne le configure pas globalement
+      const payload = this.jwtService.verify<{ sub: string }>(token, {
+        secret: this.config.getOrThrow<string>('JWT_SECRET'),
+      });
       client.data.userId = payload.sub;
 
       const sockets = this.userSockets.get(payload.sub) ?? new Set();
@@ -53,23 +56,6 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     if (!sockets?.size) this.userSockets.delete(userId);
   }
 
-  @SubscribeMessage('send_message')
-  async handleSendMessage(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { recipient_id: string; content: string },
-  ) {
-    const senderId: string = client.data.userId;
-    if (!senderId || !data?.recipient_id || !data?.content) return;
-
-    try {
-      const msg = await this.messageService.sendMessage(senderId, data.recipient_id, data.content);
-      this.server.to(`user:${data.recipient_id}`).emit('new_message', msg);
-      client.emit('new_message', msg);
-    } catch {
-      client.emit('message_error', { error: 'Envoi échoué' });
-    }
-  }
-
   @SubscribeMessage('typing')
   handleTyping(
     @ConnectedSocket() client: Socket,
@@ -80,7 +66,8 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     this.server.to(`user:${data.recipient_id}`).emit('typing', { sender_id: senderId });
   }
 
-  notifyNewMessage(recipientId: string, message: unknown): void {
-    this.server.to(`user:${recipientId}`).emit('new_message', message);
+  // Appelé par MessageService après un envoi REST pour notifier les deux participants en temps réel
+  notifyNewMessage(userId: string, message: unknown): void {
+    this.server.to(`user:${userId}`).emit('new_message', message);
   }
 }

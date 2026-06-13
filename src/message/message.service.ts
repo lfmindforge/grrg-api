@@ -1,11 +1,12 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import { Conversation } from './conversation.entity';
 import { Message } from './message.entity';
 import { User } from '../user/user.entity';
 import { NotificationService } from '../notifications/notification.service';
 import { EventLogService } from '../event-log/event-log.service';
+import { MessagingGateway } from './messaging.gateway';
 import { EventType } from '../event-log/event-log.types';
 import { NotificationType } from '../notifications/notification.types';
 import { ConversationResponseDto, MessageResponseDto } from './dto/conversation-response.dto';
@@ -21,6 +22,7 @@ export class MessageService {
     private readonly userRepo: Repository<User>,
     private readonly notifService: NotificationService,
     private readonly eventService: EventLogService,
+    private readonly messagingGateway: MessagingGateway,
   ) {}
 
   async findOrCreateConversation(userAId: string, userBId: string): Promise<Conversation> {
@@ -47,6 +49,13 @@ export class MessageService {
       this.msgRepo.create({ conversation_id: conversation.id, sender_id: senderId, content }),
     );
 
+    const dto = this.toMessageDto(msg, sender);
+
+    // Temps réel : notifier les deux participants via Socket.IO
+    this.messagingGateway.notifyNewMessage(recipientId, dto);
+    // Le sender reçoit aussi l'événement pour mettre à jour sa tuile de conversation
+    this.messagingGateway.notifyNewMessage(senderId, dto);
+
     await this.notifService.notify(recipientId, NotificationType.MESSAGE_RECEIVED, {
       sender_id: senderId,
       sender_pseudo: sender.pseudo,
@@ -60,7 +69,7 @@ export class MessageService {
       conversation_id: conversation.id,
     });
 
-    return this.toMessageDto(msg, sender);
+    return dto;
   }
 
   async getConversations(userId: string): Promise<ConversationResponseDto[]> {
@@ -128,7 +137,11 @@ export class MessageService {
     if (conv.user_a_id !== userId && conv.user_b_id !== userId) {
       throw new ForbiddenException('Accès refusé');
     }
-    await this.msgRepo.update({ conversation_id: conversationId, is_read: false }, { is_read: true });
+    // Uniquement les messages REÇUS (envoyés par l'autre utilisateur) — ne pas toucher aux envoyés par userId
+    await this.msgRepo.update(
+      { conversation_id: conversationId, is_read: false, sender_id: Not(userId) },
+      { is_read: true },
+    );
   }
 
   private toMessageDto(msg: Message, sender: User): MessageResponseDto {

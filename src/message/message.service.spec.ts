@@ -1,12 +1,14 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Not } from 'typeorm';
 import { MessageService } from './message.service';
 import { Message } from './message.entity';
 import { Conversation } from './conversation.entity';
 import { User } from '../user/user.entity';
 import { NotificationService } from '../notifications/notification.service';
 import { EventLogService } from '../event-log/event-log.service';
+import { MessagingGateway } from './messaging.gateway';
 
 const mockRepo = () => ({
   findOne: jest.fn(),
@@ -26,6 +28,7 @@ describe('MessageService', () => {
   let userRepo: ReturnType<typeof mockRepo>;
   let notifService: { notify: jest.Mock };
   let eventService: { log: jest.Mock };
+  let messagingGateway: { notifyNewMessage: jest.Mock };
 
   beforeEach(async () => {
     convRepo = mockRepo();
@@ -33,6 +36,7 @@ describe('MessageService', () => {
     userRepo = mockRepo();
     notifService = { notify: jest.fn() };
     eventService = { log: jest.fn() };
+    messagingGateway = { notifyNewMessage: jest.fn() };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -42,6 +46,7 @@ describe('MessageService', () => {
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: NotificationService, useValue: notifService },
         { provide: EventLogService, useValue: eventService },
+        { provide: MessagingGateway, useValue: messagingGateway },
       ],
     }).compile();
 
@@ -105,7 +110,7 @@ describe('MessageService', () => {
       msgRepo.update = jest.fn().mockResolvedValue({ affected: 2 });
       await service.markRead('bbb', 'conv-1');
       expect(msgRepo.update).toHaveBeenCalledWith(
-        { conversation_id: 'conv-1', is_read: false },
+        { conversation_id: 'conv-1', is_read: false, sender_id: Not('bbb') },
         { is_read: true },
       );
     });
