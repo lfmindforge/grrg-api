@@ -7,6 +7,7 @@ export enum NotificationType {
   BADGE_EARNED = 'badge_earned',
   NEW_FOLLOWER = 'new_follower',
   WISH_EXPIRED = 'wish_expired',
+  MESSAGE_RECEIVED = 'message_received',
 }
 
 export function truncateTitle(title: string, max = 50): string {
