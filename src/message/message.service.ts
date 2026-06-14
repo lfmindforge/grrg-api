@@ -31,8 +31,12 @@ export class MessageService {
     }
     // ordre canonique : plus petit UUID en user_a (correspond à la contrainte CHECK en DB)
     const [a, b] = [userAId, userBId].sort();
-    const existing = await this.convRepo.findOne({ where: { user_a_id: a, user_b_id: b } });
-    if (existing) return existing;
+    const existing = await this.convRepo.findOne({ where: { user_a_id: a, user_b_id: b }, withDeleted: true });
+    if (existing) {
+      // Restaure si précédemment supprimée (soft delete)
+      if (existing.deleted_at) await this.convRepo.recover(existing);
+      return existing;
+    }
     const conv = this.convRepo.create({ user_a_id: a, user_b_id: b });
     return this.convRepo.save(conv);
   }

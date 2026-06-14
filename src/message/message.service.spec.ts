@@ -59,7 +59,7 @@ describe('MessageService', () => {
       const conv = { id: 'conv-1', user_a_id: 'aaa', user_b_id: 'bbb' };
       convRepo.findOne.mockResolvedValue(conv);
       const result = await service.findOrCreateConversation('bbb', 'aaa');
-      expect(convRepo.findOne).toHaveBeenCalledWith({ where: { user_a_id: 'aaa', user_b_id: 'bbb' } });
+      expect(convRepo.findOne).toHaveBeenCalledWith({ where: { user_a_id: 'aaa', user_b_id: 'bbb' }, withDeleted: true });
       expect(result).toBe(conv);
     });
 
