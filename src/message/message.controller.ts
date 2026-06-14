@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { MessageService } from './message.service';
 import { SendMessageDto } from './dto/send-message.dto';
 
@@ -31,5 +31,14 @@ export class MessageController {
     @Param('conversationId') conversationId: string,
   ) {
     return this.messageService.markRead(req.user.id, conversationId);
+  }
+
+  @Delete('conversations/:conversationId')
+  @HttpCode(204)
+  deleteConversation(
+    @Req() req: { user: { id: string } },
+    @Param('conversationId') conversationId: string,
+  ) {
+    return this.messageService.deleteConversation(req.user.id, conversationId);
   }
 }
