@@ -18,6 +18,7 @@ const mockRepo = () => ({
   save: jest.fn(),
   create: jest.fn(),
   update: jest.fn(),
+  softRemove: jest.fn(),
   createQueryBuilder: jest.fn(),
 });
 
@@ -101,6 +102,26 @@ describe('MessageService', () => {
 
       expect(msgRepo.save).toHaveBeenCalled();
       expect(notifService.notify).toHaveBeenCalledWith('bbb', 'message_received', expect.any(Object));
+    });
+  });
+
+  describe('deleteConversation', () => {
+    it('supprime la conversation si participant valide', async () => {
+      const conv = { id: 'conv-1', user_a_id: 'aaa', user_b_id: 'bbb' };
+      convRepo.findOne.mockResolvedValue(conv);
+      convRepo.softRemove.mockResolvedValue(conv);
+      await service.deleteConversation('aaa', 'conv-1');
+      expect(convRepo.softRemove).toHaveBeenCalledWith(conv);
+    });
+
+    it("rejette si l'utilisateur n'est pas participant", async () => {
+      convRepo.findOne.mockResolvedValue({ id: 'conv-1', user_a_id: 'aaa', user_b_id: 'bbb' });
+      await expect(service.deleteConversation('ccc', 'conv-1')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('rejette si la conversation est introuvable', async () => {
+      convRepo.findOne.mockResolvedValue(null);
+      await expect(service.deleteConversation('aaa', 'conv-x')).rejects.toThrow(NotFoundException);
     });
   });
 
