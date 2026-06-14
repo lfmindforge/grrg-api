@@ -72,10 +72,19 @@ export class MessageService {
     return dto;
   }
 
+  async deleteConversation(userId: string, conversationId: string): Promise<void> {
+    const conv = await this.convRepo.findOne({ where: { id: conversationId } });
+    if (!conv) throw new NotFoundException('Conversation introuvable');
+    if (conv.user_a_id !== userId && conv.user_b_id !== userId) {
+      throw new ForbiddenException('Accès refusé');
+    }
+    await this.convRepo.softRemove(conv);
+  }
+
   async getConversations(userId: string): Promise<ConversationResponseDto[]> {
     const convs = await this.convRepo
       .createQueryBuilder('c')
-      .where('c.user_a_id = :id OR c.user_b_id = :id', { id: userId })
+      .where('(c.user_a_id = :id OR c.user_b_id = :id) AND c.deleted_at IS NULL', { id: userId })
       .leftJoinAndSelect('c.user_a', 'ua')
       .leftJoinAndSelect('c.user_b', 'ub')
       .getMany();
