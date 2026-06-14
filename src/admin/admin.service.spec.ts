@@ -4,27 +4,49 @@ import { NotFoundException } from '@nestjs/common';
 import { User } from '../user/user.entity';
 import { Wish } from '../wish/wish.entity';
 import { Comment } from '../comment/comment.entity';
+import { Donation } from '../donation/donation.entity';
 import { AdminService } from './admin.service';
 import { EventLogService } from '../event-log/event-log.service';
 import { EventType } from '../event-log/event-log.types';
 import { MailService } from '../mail/mail.service';
 
-const mockQb = {
-  select: jest.fn().mockReturnThis(),
-  where: jest.fn().mockReturnThis(),
-  orderBy: jest.fn().mockReturnThis(),
-  limit: jest.fn().mockReturnThis(),
-  getMany: jest.fn(),
-};
+const makeQb = (getRawResult: unknown[] = []) => ({
+  select:    jest.fn().mockReturnThis(),
+  addSelect: jest.fn().mockReturnThis(),
+  where:     jest.fn().mockReturnThis(),
+  andWhere:  jest.fn().mockReturnThis(),
+  groupBy:   jest.fn().mockReturnThis(),
+  orderBy:   jest.fn().mockReturnThis(),
+  limit:     jest.fn().mockReturnThis(),
+  getMany:   jest.fn().mockResolvedValue([]),
+  getRawMany: jest.fn().mockResolvedValue(getRawResult),
+});
+
+const mockUserQb    = makeQb();
+const mockWishQb    = makeQb();
+const mockDonationQb = makeQb();
 
 const mockUserRepo = {
-  createQueryBuilder: jest.fn().mockReturnValue(mockQb),
+  createQueryBuilder: jest.fn().mockReturnValue(mockUserQb),
   findOne: jest.fn(),
-  update: jest.fn(),
+  update:  jest.fn(),
+  count:   jest.fn(),
 };
 
-const mockWishRepo    = { findOne: jest.fn(), softRemove: jest.fn() };
+const mockWishRepo = {
+  createQueryBuilder: jest.fn().mockReturnValue(mockWishQb),
+  findOne:    jest.fn(),
+  softRemove: jest.fn(),
+  count:      jest.fn(),
+};
+
 const mockCommentRepo = { findOne: jest.fn(), softRemove: jest.fn() };
+
+const mockDonationRepo = {
+  createQueryBuilder: jest.fn().mockReturnValue(mockDonationQb),
+  count: jest.fn(),
+};
+
 const mockEventService = { log: jest.fn().mockResolvedValue(undefined) };
 const mockMailService  = { sendMail: jest.fn().mockResolvedValue(undefined) };
 
@@ -42,37 +64,40 @@ describe('AdminService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
-        { provide: getRepositoryToken(User),    useValue: mockUserRepo },
-        { provide: getRepositoryToken(Wish),    useValue: mockWishRepo },
-        { provide: getRepositoryToken(Comment), useValue: mockCommentRepo },
-        { provide: EventLogService,             useValue: mockEventService },
-        { provide: MailService,                 useValue: mockMailService },
+        { provide: getRepositoryToken(User),     useValue: mockUserRepo },
+        { provide: getRepositoryToken(Wish),     useValue: mockWishRepo },
+        { provide: getRepositoryToken(Comment),  useValue: mockCommentRepo },
+        { provide: getRepositoryToken(Donation), useValue: mockDonationRepo },
+        { provide: EventLogService,              useValue: mockEventService },
+        { provide: MailService,                  useValue: mockMailService },
       ],
     }).compile();
 
     service = module.get<AdminService>(AdminService);
     jest.clearAllMocks();
-    mockUserRepo.createQueryBuilder.mockReturnValue(mockQb);
+    mockUserRepo.createQueryBuilder.mockReturnValue(mockUserQb);
+    mockWishRepo.createQueryBuilder.mockReturnValue(mockWishQb);
+    mockDonationRepo.createQueryBuilder.mockReturnValue(mockDonationQb);
   });
 
   // ─── searchUsers ────────────────────────────────────────────────────────────
 
   describe('searchUsers()', () => {
     it("retourne les utilisateurs dont le pseudo contient la recherche", async () => {
-      mockQb.getMany.mockResolvedValue([baseUser]);
+      mockUserQb.getMany.mockResolvedValue([baseUser]);
 
       const result = await service.searchUsers('alice');
 
       expect(result).toHaveLength(1);
-      expect(mockQb.where).toHaveBeenCalledWith('u.pseudo ILIKE :q', { q: '%alice%' });
+      expect(mockUserQb.where).toHaveBeenCalledWith('u.pseudo ILIKE :q', { q: '%alice%' });
     });
 
     it("retourne jusqu'à 20 utilisateurs pour une recherche vide", async () => {
-      mockQb.getMany.mockResolvedValue([baseUser]);
+      mockUserQb.getMany.mockResolvedValue([baseUser]);
 
       await service.searchUsers('');
 
-      expect(mockQb.limit).toHaveBeenCalledWith(20);
+      expect(mockUserQb.limit).toHaveBeenCalledWith(20);
     });
   });
 
@@ -196,6 +221,84 @@ describe('AdminService', () => {
 
       await expect(service.deleteContent(ADMIN_ID, 'comment', 'unknown')).rejects.toThrow(NotFoundException);
       expect(mockCommentRepo.softRemove).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── getStats ───────────────────────────────────────────────────────────────
+
+  describe('getStats()', () => {
+    beforeEach(() => {
+      mockUserRepo.count.mockResolvedValue(42);
+      mockWishRepo.count.mockResolvedValue(18);
+      mockDonationRepo.count
+        .mockResolvedValueOnce(30)  // total_donations
+        .mockResolvedValueOnce(20); // total_donations_completed
+
+      mockDonationQb.getRawMany
+        .mockResolvedValueOnce([{ key: 'financial', count: '15' }, { key: 'delivery', count: '10' }, { key: 'in_person', count: '5' }])
+        .mockResolvedValueOnce([]); // activity donations
+
+      mockWishQb.getRawMany
+        .mockResolvedValueOnce([{ key: 'pending', count: '10' }, { key: 'fulfilled', count: '8' }])
+        .mockResolvedValueOnce([{ key: 'tech', count: '6' }, { key: 'sport', count: '4' }])
+        .mockResolvedValueOnce([]); // activity wishes
+
+      mockUserQb.getRawMany.mockResolvedValue([]); // activity users
+    });
+
+    it('retourne la structure complète avec les 4 sections', async () => {
+      const result = await service.getStats();
+
+      expect(result).toHaveProperty('kpis');
+      expect(result).toHaveProperty('donations_by_type');
+      expect(result).toHaveProperty('wishes_by_status');
+      expect(result).toHaveProperty('top_categories');
+      expect(result).toHaveProperty('activity');
+    });
+
+    it('retourne les KPIs corrects', async () => {
+      const { kpis } = await service.getStats();
+
+      expect(kpis.total_users).toBe(42);
+      expect(kpis.total_wishes).toBe(18);
+      expect(kpis.total_donations).toBe(30);
+      expect(kpis.total_donations_completed).toBe(20);
+    });
+
+    it('convertit les counts en number et mappe la clé correctement', async () => {
+      const { donations_by_type, wishes_by_status, top_categories } = await service.getStats();
+
+      expect(donations_by_type).toEqual([
+        { key: 'financial', count: 15 },
+        { key: 'delivery',  count: 10 },
+        { key: 'in_person', count: 5  },
+      ]);
+      expect(wishes_by_status).toEqual([
+        { key: 'pending',   count: 10 },
+        { key: 'fulfilled', count: 8  },
+      ]);
+      expect(top_categories).toEqual([
+        { key: 'tech',  count: 6 },
+        { key: 'sport', count: 4 },
+      ]);
+    });
+
+    it('retourne un tableau activity de 30 entrées avec zéros pour les jours sans données', async () => {
+      const { activity } = await service.getStats();
+
+      expect(activity).toHaveLength(30);
+      expect(activity.every((d) => d.users === 0 && d.wishes === 0 && d.donations === 0)).toBe(true);
+    });
+
+    it('remplit correctement les valeurs non nulles dans activity', async () => {
+      const today = new Date().toISOString().slice(0, 10);
+
+      mockUserQb.getRawMany.mockResolvedValue([{ date: today, count: '3' }]);
+
+      const { activity } = await service.getStats();
+
+      const todayEntry = activity.find((d) => d.date === today);
+      expect(todayEntry?.users).toBe(3);
     });
   });
 });
