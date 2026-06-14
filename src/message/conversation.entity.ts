@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { User } from '../user/user.entity';
 
 @Entity('conversations')
@@ -22,4 +22,7 @@ export class Conversation {
 
   @CreateDateColumn()
   created_at!: Date;
+
+  @DeleteDateColumn()
+  deleted_at?: Date;
 }
