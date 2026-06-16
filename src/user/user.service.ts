@@ -19,7 +19,6 @@ import {
   WishPreviewDto,
 } from './user.types';
 import { WishStatus } from '../wish/wish.types';
-import { DonationStatus } from '../donation/donation.types';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserExportDto } from './dto/user-export.dto';
@@ -92,7 +91,10 @@ export class UserService {
           where: { user_id: id, is_private: false, status: Not(WishStatus.CANCELLED) },
           order: { created_at: 'DESC' },
         }),
-        this.donationRepo.count({ where: { donor_id: id, status: DonationStatus.COMPLETED } }),
+        this.donationRepo.manager.query<[{ count: string }]>(
+          `SELECT COUNT(e.id)::int AS count FROM evaluations e JOIN donations d ON d.id = e.donation_id WHERE d.donor_id = $1`,
+          [id],
+        ).then(([r]) => parseInt(r!.count, 10)),
         this.followRepo.count({ where: { followed_id: id } }),
         this.followRepo.count({ where: { follower_id: id } }),
         this.badgeService.findByUser(id),
