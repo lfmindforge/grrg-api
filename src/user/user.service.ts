@@ -90,6 +90,9 @@ export class UserService {
         this.wishRepo.find({
           where: { user_id: id, is_private: false, status: Not(WishStatus.CANCELLED) },
           order: { created_at: 'DESC' },
+        }).then((ws) => {
+          const rank: Record<string, number> = { pending: 1, in_progress: 2, fulfilled: 3 };
+          return ws.sort((a, b) => (rank[a.status] ?? 4) - (rank[b.status] ?? 4));
         }),
         this.donationRepo.manager.query<[{ count: string }]>(
           `SELECT COUNT(e.id)::int AS count FROM evaluations e JOIN donations d ON d.id = e.donation_id WHERE d.donor_id = $1`,

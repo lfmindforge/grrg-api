@@ -61,13 +61,20 @@ export class WishService {
     }
 
     const sortOrder: 'ASC' | 'DESC' = query.order === 'asc' ? 'ASC' : 'DESC';
+
+    // Tri primaire : pending → in_progress → fulfilled
+    qb.addSelect(
+      `CASE wish.status WHEN 'pending' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'fulfilled' THEN 3 ELSE 4 END`,
+      'status_order',
+    ).orderBy('status_order', 'ASC');
+
     if ((query.sort ?? 'date') === 'popularity') {
       qb.addSelect(
         '(SELECT COUNT(d.id) FROM donations d WHERE d.wish_id = wish.id)',
         'donations_count',
-      ).orderBy('donations_count', sortOrder);
+      ).addOrderBy('donations_count', sortOrder);
     } else {
-      qb.orderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
+      qb.addOrderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
     }
 
     qb.addSelect(
@@ -172,7 +179,14 @@ export class WishService {
     }
 
     const sortOrder: 'ASC' | 'DESC' = query.order === 'asc' ? 'ASC' : 'DESC';
-    qb.orderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
+
+    // Tri primaire : pending → in_progress → fulfilled
+    qb.addSelect(
+      `CASE wish.status WHEN 'pending' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'fulfilled' THEN 3 ELSE 4 END`,
+      'status_order',
+    ).orderBy('status_order', 'ASC')
+      .addOrderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
+
     qb.skip((page - 1) * limit).take(limit);
 
     const [data, total] = await qb.getManyAndCount();
