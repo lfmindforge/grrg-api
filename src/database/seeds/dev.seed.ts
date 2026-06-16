@@ -38,6 +38,28 @@ async function seed() {
 
   await userRepo.upsert(users, ['email']);
 
+  const categories = [
+    'Art',
+    'Beauté & Bien-être',
+    'Cuisine & Gastronomie',
+    'High-Tech',
+    'Jeux & Loisirs',
+    'Livres & Culture',
+    'Maison & Déco',
+    'Mode & Accessoires',
+    'Musique',
+    'Sport & Fitness',
+    'Voyage & Aventure',
+    'Autre',
+  ];
+
+  for (const name of categories) {
+    await dataSource.query(
+      `INSERT INTO categories (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+      [name],
+    );
+  }
+
   console.log('Seed dev terminé.');
   await dataSource.destroy();
 }
