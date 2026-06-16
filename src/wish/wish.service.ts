@@ -102,7 +102,7 @@ export class WishService {
     return { data: data as unknown as WishPublicDto[], total, page, limit };
   }
 
-  async findOne(id: string): Promise<WishPublicDto> {
+  async findOne(id: string, viewerId: string | null = null): Promise<WishPublicDto> {
     const { entities, raw } = await this.wishRepo
       .createQueryBuilder('wish')
       .leftJoinAndSelect('wish.user', 'user')
@@ -127,16 +127,23 @@ export class WishService {
           ) _r)`,
         'reactions',
       )
-      .where('wish.id = :id AND wish.is_private = :isPrivate', {
-        id,
-        isPrivate: false,
-      })
+      .where('wish.id = :id', { id })
       .andWhere('wish.status != :expired', { expired: WishStatus.EXPIRED })
       .andWhere('(wish.expires_at IS NULL OR wish.expires_at > :now)', { now: new Date() })
       .getRawAndEntities();
 
-    if (!entities[0]) {
-      throw new NotFoundException('Souhait introuvable');
+    const wish = entities[0];
+    if (!wish) throw new NotFoundException('Souhait introuvable');
+
+    if (wish.is_private) {
+      const isOwner = viewerId === wish.user_id;
+      const isFollower = viewerId
+        ? (await this.wishRepo.manager.query<{ exists: boolean }[]>(
+            `SELECT EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND followed_id = $2) AS exists`,
+            [viewerId, wish.user_id],
+          ))[0]?.exists ?? false
+        : false;
+      if (!isOwner && !isFollower) throw new NotFoundException('Souhait introuvable');
     }
 
     const donated_amount = parseFloat(raw[0]?.donated_amount ?? '0');
