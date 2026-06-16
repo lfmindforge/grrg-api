@@ -70,9 +70,9 @@ export class WishService {
 
     if ((query.sort ?? 'date') === 'popularity') {
       qb.addSelect(
-        '(SELECT COUNT(d.id) FROM donations d WHERE d.wish_id = wish.id)',
-        'donations_count',
-      ).addOrderBy('donations_count', sortOrder);
+        '(SELECT COUNT(r.id) FROM reactions r WHERE r.wish_id = wish.id)',
+        'reactions_count',
+      ).addOrderBy('reactions_count', sortOrder);
     } else {
       qb.addOrderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
     }
