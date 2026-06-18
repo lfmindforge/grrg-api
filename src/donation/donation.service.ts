@@ -56,12 +56,11 @@ export class DonationService {
         dto.type !== DonationType.FINANCIAL
           ? (dto.nature_description ?? null)
           : null,
-      is_anonymous: dto.is_anonymous ?? false,
       status: DonationStatus.PENDING,
     });
 
     const saved = await this.donationRepo.save(donation);
-    await this.eventService.log(EventType.DONATION_CREATE, donorId, { wish_id: dto.wish_id, type: dto.type, is_anonymous: saved.is_anonymous });
+    await this.eventService.log(EventType.DONATION_CREATE, donorId, { wish_id: dto.wish_id, type: dto.type });
     wish.status = WishStatus.IN_PROGRESS;
     await this.wishRepo.save(wish);
 
@@ -74,7 +73,6 @@ export class DonationService {
     const donor = await this.userRepo.findOne({ where: { id: donorId } });
     await this.notificationService.notify(wish.user_id, NotificationType.DONATION_RECEIVED, {
       donor_pseudo: donor!.pseudo,
-      is_anonymous: saved.is_anonymous,
       wish_title: truncateTitle(wish.title),
       wish_id: wish.id,
       donation_id: saved.id,

@@ -26,7 +26,6 @@ export class GlowService {
   computeGlow(
     satisfaction: EvaluationSatisfaction,
     bonus: EvaluationBonus,
-    isAnonymous: boolean,
     donationType: DonationType,
   ): number {
     const satPoints: Record<EvaluationSatisfaction, number> = {
@@ -47,7 +46,6 @@ export class GlowService {
     return (
       satPoints[satisfaction] +
       bonusPoints[bonus] +
-      (isAnonymous ? 40 : 0) +
       typePoints[donationType]
     );
   }

@@ -176,7 +176,6 @@ describe('NotificationService', () => {
     await service.notify('u1', NotificationType.DONATION_RECEIVED, {
       wish_title: 'Vélo',
       donor_pseudo: 'bob',
-      is_anonymous: false,
     });
 
     expect(mockMailService.sendMail).not.toHaveBeenCalled();
@@ -192,7 +191,6 @@ describe('NotificationService', () => {
     await service.notify('u1', NotificationType.DONATION_RECEIVED, {
       wish_title: 'Vélo',
       donor_pseudo: 'bob',
-      is_anonymous: false,
     });
 
     expect(mockMailService.sendMail).toHaveBeenCalled();

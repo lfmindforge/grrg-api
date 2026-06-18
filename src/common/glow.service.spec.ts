@@ -33,16 +33,15 @@ describe('GlowService', () => {
 
   describe('computeGlow', () => {
     it.each([
-      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, false, DonationType.FINANCIAL, 20],
-      [EvaluationSatisfaction.HAPPY, EvaluationBonus.NONE, false, DonationType.FINANCIAL, 30],
-      [EvaluationSatisfaction.THRILLED, EvaluationBonus.NONE, false, DonationType.FINANCIAL, 40],
-      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.ON_TIME, false, DonationType.FINANCIAL, 30],
-      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, true, DonationType.FINANCIAL, 60],
-      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, false, DonationType.DELIVERY, 30],
-      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, false, DonationType.IN_PERSON, 45],
-      [EvaluationSatisfaction.THRILLED, EvaluationBonus.WENT_ABOVE_AND_BEYOND, true, DonationType.IN_PERSON, 115],
-    ])('%s + %s + anon=%s + %s → %i', (sat, bonus, anon, type, expected) => {
-      expect(service.computeGlow(sat, bonus, anon, type)).toBe(expected);
+      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, DonationType.FINANCIAL, 20],
+      [EvaluationSatisfaction.HAPPY, EvaluationBonus.NONE, DonationType.FINANCIAL, 30],
+      [EvaluationSatisfaction.THRILLED, EvaluationBonus.NONE, DonationType.FINANCIAL, 40],
+      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.ON_TIME, DonationType.FINANCIAL, 30],
+      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, DonationType.DELIVERY, 30],
+      [EvaluationSatisfaction.NEUTRAL, EvaluationBonus.NONE, DonationType.IN_PERSON, 45],
+      [EvaluationSatisfaction.THRILLED, EvaluationBonus.WENT_ABOVE_AND_BEYOND, DonationType.IN_PERSON, 75],
+    ])('%s + %s + %s → %i', (sat, bonus, type, expected) => {
+      expect(service.computeGlow(sat, bonus, type)).toBe(expected);
     });
   });
 

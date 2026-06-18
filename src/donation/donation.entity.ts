@@ -42,9 +42,6 @@ export class Donation {
   @Column({ type: 'text', nullable: true })
   nature_description!: string | null;
 
-  @Column({ default: false })
-  is_anonymous!: boolean;
-
   @Column({
     type: 'enum',
     enum: DonationStatus,

@@ -23,8 +23,7 @@ export function buildEmailTemplate(
 }
 
 function donationReceived(payload: Record<string, unknown>): MailTemplate {
-  const isAnonymous = payload['is_anonymous'] as boolean;
-  const donorName = isAnonymous ? "Quelqu'un" : (payload['donor_pseudo'] as string);
+  const donorName = payload['donor_pseudo'] as string;
   const wishTitle = payload['wish_title'] as string;
 
   return {

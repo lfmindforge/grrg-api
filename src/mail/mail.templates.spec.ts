@@ -5,7 +5,6 @@ describe('buildEmailTemplate', () => {
   it('retourne un template pour donation_received', () => {
     const result = buildEmailTemplate(NotificationType.DONATION_RECEIVED, {
       donor_pseudo: 'Alice',
-      is_anonymous: false,
       wish_title: 'Un vélo',
       wish_id: 'w1',
       donation_id: 'd1',
@@ -15,19 +14,6 @@ describe('buildEmailTemplate', () => {
     expect(result!.subject).toContain('don');
     expect(result!.html).toContain('Un vélo');
     expect(result!.html).toContain('Alice');
-  });
-
-  it('masque le pseudo pour un don anonyme (donation_received)', () => {
-    const result = buildEmailTemplate(NotificationType.DONATION_RECEIVED, {
-      donor_pseudo: 'Alice',
-      is_anonymous: true,
-      wish_title: 'Un vélo',
-      wish_id: 'w1',
-      donation_id: 'd1',
-    });
-
-    expect(result!.html).not.toContain('Alice');
-    expect(result!.html).toContain("Quelqu'un");
   });
 
   it('retourne un template pour evaluation_received', () => {

@@ -85,7 +85,6 @@ export class EvaluationService {
     const glow_awarded = this.glowService.computeGlow(
       dto.satisfaction,
       dto.bonus ?? EvaluationBonus.NONE,
-      donation.is_anonymous,
       donation.type,
     );
 
@@ -135,9 +134,6 @@ export class EvaluationService {
       });
     }
 
-    if (donation.is_anonymous) {
-      await this.badgeService.award(donation.donor_id, BadgeType.MYSTERY_ANONYMOUS);
-    }
     if (
       evaluation.bonus === EvaluationBonus.WENT_ABOVE_AND_BEYOND &&
       evaluation.satisfaction === EvaluationSatisfaction.THRILLED
