@@ -13,15 +13,15 @@ async function seed() {
 
   const users: DeepPartial<User>[] = [
     {
-      email: 'luc@test.com',
-      pseudo: 'luc',
+      email: 'User_1@test.com',
+      pseudo: 'User_1',
       password_hash: hash,
       birthdate: new Date('1995-01-01'),
       grade: 'etincelle',
     },
     {
-      email: 'claw@test.com',
-      pseudo: 'claw',
+      email: 'User_2@test.com',
+      pseudo: 'User_2',
       password_hash: hash,
       birthdate: new Date('1992-06-15'),
       grade: 'etincelle',
