@@ -9,6 +9,7 @@ export interface UserPublicDto {
   id: string;
   pseudo: string;
   avatar_url: string | null;
+  region: string | null;
   grade: string;
   glow_points: number;
 }

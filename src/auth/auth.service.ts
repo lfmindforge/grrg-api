@@ -58,6 +58,7 @@ export class AuthService {
       password_hash,
       pseudo: dto.pseudo,
       birthdate,
+      region: dto.region?.trim() || null,
     });
 
     await this.eventService.log(EventType.USER_REGISTER, user.id, { pseudo: user.pseudo, method: 'email' });

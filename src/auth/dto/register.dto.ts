@@ -1,8 +1,10 @@
 import {
   IsEmail,
+  IsOptional,
   IsString,
   Length,
   Matches,
+  MaxLength,
   MinLength,
   IsISO8601,
 } from 'class-validator';
@@ -30,4 +32,10 @@ export class RegisterDto {
   @ApiProperty({ example: '1995-06-15', description: 'Date de naissance ISO8601 (18 ans minimum)' })
   @IsISO8601({ strict: true })
   birthdate!: string;
+
+  @ApiProperty({ example: 'Bruxelles', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  region?: string;
 }

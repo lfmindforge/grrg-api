@@ -114,6 +114,7 @@ export class UserService {
       id: user.id,
       pseudo: user.pseudo,
       avatar_url: user.avatar_url,
+      region: user.region,
       grade: user.grade,
       glow_points: user.glow_points,
       badges: badgeEntities.map((b) => this.badgeService.toDto(b)),
@@ -136,6 +137,10 @@ export class UserService {
       const existing = await this.findByPseudo(dto.pseudo);
       if (existing) throw new ConflictException('Pseudo déjà utilisé');
       user!.pseudo = dto.pseudo;
+    }
+
+    if (dto.region !== undefined) {
+      user!.region = dto.region.trim() || null;
     }
 
     if (file) {

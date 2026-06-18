@@ -7,6 +7,7 @@ export type CreateUserData = {
   pseudo: string;
   birthdate?: Date | null;
   avatar_url?: string | null;
+  region?: string | null;
   oauth_provider?: string | null;
   oauth_id?: string | null;
 };
@@ -30,6 +31,7 @@ export interface UserPublicProfileDto {
   id: string;
   pseudo: string;
   avatar_url: string | null;
+  region: string | null;
   grade: string;
   glow_points: number;
   badges: BadgeDto[];
