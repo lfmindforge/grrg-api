@@ -31,6 +31,7 @@ export interface WishPublicDto {
   comments_count?: number;
   reactions: ReactionCountDto[];
   evaluation_note?: string | null;
+  evaluation_proof_url?: string | null;
 }
 
 export interface PaginatedWishesDto {

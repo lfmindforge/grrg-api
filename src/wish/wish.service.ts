@@ -138,6 +138,10 @@ export class WishService {
         `(SELECT e.description FROM evaluations e JOIN donations d ON d.id = e.donation_id WHERE d.wish_id = wish.id AND d.status = 'completed' AND e.deleted_at IS NULL LIMIT 1)`,
         'evaluation_note',
       )
+      .addSelect(
+        `(SELECT e.proof_url FROM evaluations e JOIN donations d ON d.id = e.donation_id WHERE d.wish_id = wish.id AND d.status = 'completed' AND e.deleted_at IS NULL LIMIT 1)`,
+        'evaluation_proof_url',
+      )
       .where('wish.id = :id', { id })
       .andWhere('wish.status != :expired', { expired: WishStatus.EXPIRED })
       .andWhere('(wish.expires_at IS NULL OR wish.expires_at > :now)', { now: new Date() })
@@ -161,7 +165,8 @@ export class WishService {
     const comments_count = parseInt(raw[0]?.comments_count ?? '0', 10);
     const reactions = raw[0]?.reactions ?? [];
     const evaluation_note: string | null = raw[0]?.evaluation_note ?? null;
-    return { ...entities[0], donated_amount, comments_count, reactions, evaluation_note } as unknown as WishPublicDto;
+    const evaluation_proof_url: string | null = raw[0]?.evaluation_proof_url ?? null;
+    return { ...entities[0], donated_amount, comments_count, reactions, evaluation_note, evaluation_proof_url } as unknown as WishPublicDto;
   }
 
   private resolveSortField(sort: string): string {

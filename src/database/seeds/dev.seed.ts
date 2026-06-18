@@ -18,6 +18,7 @@ async function seed() {
       password_hash: hash,
       birthdate: new Date('1995-01-01'),
       grade: 'etincelle',
+      region: 'Liège',
     },
     {
       email: 'User_2@test.com',
@@ -25,6 +26,7 @@ async function seed() {
       password_hash: hash,
       birthdate: new Date('1992-06-15'),
       grade: 'etincelle',
+      region: 'Liège',
     },
     {
       email: 'admin@grrg.dev',
