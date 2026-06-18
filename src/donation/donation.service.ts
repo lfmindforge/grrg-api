@@ -18,6 +18,7 @@ import { NotificationService } from '../notifications/notification.service';
 import { NotificationType, truncateTitle } from '../notifications/notification.types';
 import { EventLogService } from '../event-log/event-log.service';
 import { EventType } from '../event-log/event-log.types';
+import { MessageService } from '../message/message.service';
 
 @Injectable()
 export class DonationService {
@@ -31,6 +32,7 @@ export class DonationService {
     private readonly badgeService: BadgeService,
     private readonly notificationService: NotificationService,
     private readonly eventService: EventLogService,
+    private readonly messageService: MessageService,
   ) {}
 
   async propose(donorId: string, dto: CreateDonationDto): Promise<Donation> {
@@ -78,7 +80,27 @@ export class DonationService {
       donation_id: saved.id,
     });
 
+    await this.messageService.sendMessage(
+      donorId,
+      wish.user_id,
+      this.buildDonationMessage(wish.title, dto.type, dto.amount),
+    );
+
     return saved;
+  }
+
+  private buildDonationMessage(wishTitle: string, type: DonationType, amount?: number | null): string {
+    const title = `« ${wishTitle} »`;
+    switch (type) {
+      case DonationType.FINANCIAL:
+        return amount
+          ? `Bonjour ! Je viens de proposer un don financier de ${amount}€ pour ton souhait ${title}. Dis-moi comment tu préfères organiser le transfert 😊`
+          : `Bonjour ! Je viens de proposer un don financier pour ton souhait ${title}. Dis-moi comment tu préfères organiser le transfert 😊`;
+      case DonationType.DELIVERY:
+        return `Bonjour ! Je viens de proposer un don matériel pour ton souhait ${title} et je peux te l'envoyer. Dis-moi l'adresse d'un point relais près de chez toi 😊`;
+      case DonationType.IN_PERSON:
+        return `Bonjour ! Je viens de proposer un don en main propre pour ton souhait ${title}. On peut se retrouver pour l'échange — dis-moi ce qui t'arrange 😊`;
+    }
   }
 
   async confirm(userId: string, donationId: string): Promise<Donation> {
