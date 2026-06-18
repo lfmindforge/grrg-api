@@ -81,23 +81,24 @@ export class DonationService {
     await this.messageService.sendMessage(
       donorId,
       wish.user_id,
-      this.buildDonationMessage(wish.title, dto.type, dto.amount),
+      this.buildDonationMessage(wish.title, dto.type, dto.amount, dto.nature_description),
     );
 
     return saved;
   }
 
-  private buildDonationMessage(wishTitle: string, type: DonationType, amount?: number | null): string {
+  private buildDonationMessage(wishTitle: string, type: DonationType, amount?: number | null, natureDescription?: string | null): string {
     const title = `« ${wishTitle} »`;
+    const nature = natureDescription ? ` (${natureDescription})` : '';
     switch (type) {
       case DonationType.FINANCIAL:
         return amount
           ? `Bonjour ! Je viens de proposer un don financier de ${amount}€ pour ton souhait ${title}. Dis-moi comment tu préfères organiser le transfert 😊`
           : `Bonjour ! Je viens de proposer un don financier pour ton souhait ${title}. Dis-moi comment tu préfères organiser le transfert 😊`;
       case DonationType.DELIVERY:
-        return `Bonjour ! Je viens de proposer un don matériel pour ton souhait ${title} et je peux te l'envoyer. Dis-moi l'adresse d'un point relais près de chez toi 😊`;
+        return `Bonjour ! Je viens de proposer un don matériel pour ton souhait ${title}${nature} et je peux te l'envoyer. Dis-moi l'adresse d'un point relais près de chez toi 😊`;
       case DonationType.IN_PERSON:
-        return `Bonjour ! Je viens de proposer un don en main propre pour ton souhait ${title}. On peut se retrouver pour l'échange — dis-moi ce qui t'arrange 😊`;
+        return `Bonjour ! Je viens de proposer un don en main propre pour ton souhait ${title}${nature}. On peut se retrouver pour l'échange — dis-moi ce qui t'arrange 😊`;
     }
   }
 

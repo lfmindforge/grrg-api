@@ -29,6 +29,7 @@ export interface WishPublicDto {
   donated_amount: number;
   comments_count?: number;
   reactions: ReactionCountDto[];
+  evaluation_note?: string | null;
 }
 
 export interface PaginatedWishesDto {

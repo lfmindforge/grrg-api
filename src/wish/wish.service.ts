@@ -134,6 +134,10 @@ export class WishService {
           ) _r)`,
         'reactions',
       )
+      .addSelect(
+        `(SELECT e.description FROM evaluations e JOIN donations d ON d.id = e.donation_id WHERE d.wish_id = wish.id AND d.status = 'completed' AND e.deleted_at IS NULL LIMIT 1)`,
+        'evaluation_note',
+      )
       .where('wish.id = :id', { id })
       .andWhere('wish.status != :expired', { expired: WishStatus.EXPIRED })
       .andWhere('(wish.expires_at IS NULL OR wish.expires_at > :now)', { now: new Date() })
@@ -156,7 +160,8 @@ export class WishService {
     const donated_amount = parseFloat(raw[0]?.donated_amount ?? '0');
     const comments_count = parseInt(raw[0]?.comments_count ?? '0', 10);
     const reactions = raw[0]?.reactions ?? [];
-    return { ...entities[0], donated_amount, comments_count, reactions } as unknown as WishPublicDto;
+    const evaluation_note: string | null = raw[0]?.evaluation_note ?? null;
+    return { ...entities[0], donated_amount, comments_count, reactions, evaluation_note } as unknown as WishPublicDto;
   }
 
   private resolveSortField(sort: string): string {
