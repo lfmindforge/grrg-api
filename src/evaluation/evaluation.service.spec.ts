@@ -58,7 +58,6 @@ describe('EvaluationService', () => {
     id: DONATION_ID,
     donor_id: DONOR_ID,
     type: DonationType.DELIVERY,
-    is_anonymous: false,
     status: DonationStatus.COMPLETED,
     wish: {
       id: WISH_ID,
@@ -172,7 +171,6 @@ describe('EvaluationService', () => {
       expect(glowService.computeGlow).toHaveBeenCalledWith(
         baseDto.satisfaction,
         baseDto.bonus,
-        false,
         DonationType.DELIVERY,
       );
       expect(evaluationRepo.save).toHaveBeenCalled();
@@ -314,7 +312,7 @@ describe('EvaluationService', () => {
 
   describe('evaluate() — badges', () => {
     beforeEach(() => {
-      donationRepo.findOne.mockResolvedValue({ ...mockDonation, is_anonymous: false });
+      donationRepo.findOne.mockResolvedValue({ ...mockDonation });
       evaluationRepo.findOne.mockResolvedValue(null);
       config.getOrThrow.mockReturnValue('evaluations-proof');
       supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
@@ -325,20 +323,6 @@ describe('EvaluationService', () => {
       userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
       wishRepo.save.mockResolvedValue({});
       notificationService.notify.mockResolvedValue(undefined);
-    });
-
-    it('attribue mystery_anonymous si le don est anonyme', async () => {
-      donationRepo.findOne.mockResolvedValue({ ...mockDonation, is_anonymous: true });
-
-      await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
-
-      expect(badgeService.award).toHaveBeenCalledWith(DONOR_ID, BadgeType.MYSTERY_ANONYMOUS);
-    });
-
-    it("n'attribue pas mystery_anonymous si le don n'est pas anonyme", async () => {
-      await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
-
-      expect(badgeService.award).not.toHaveBeenCalledWith(DONOR_ID, BadgeType.MYSTERY_ANONYMOUS);
     });
 
     it('attribue most_improbable_wish si went_above_and_beyond + thrilled', async () => {

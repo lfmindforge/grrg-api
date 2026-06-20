@@ -1,5 +1,4 @@
 import {
-  IsBoolean,
   IsEnum,
   IsNotEmpty,
   IsNumber,
@@ -35,8 +34,4 @@ export class CreateDonationDto {
   @IsNotEmpty()
   nature_description?: string;
 
-  @ApiPropertyOptional({ example: false, default: false })
-  @IsOptional()
-  @IsBoolean()
-  is_anonymous?: boolean;
 }

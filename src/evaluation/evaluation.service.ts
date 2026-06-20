@@ -12,7 +12,11 @@ import { Evaluation } from '../donation/evaluation.entity';
 import { Donation } from '../donation/donation.entity';
 import { User } from '../user/user.entity';
 import { Wish } from '../wish/wish.entity';
-import { DonationStatus, EvaluationBonus, EvaluationSatisfaction } from '../donation/donation.types';
+import {
+  DonationStatus,
+  EvaluationBonus,
+  EvaluationSatisfaction,
+} from '../donation/donation.types';
 import { WishStatus } from '../wish/wish.types';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
@@ -85,7 +89,6 @@ export class EvaluationService {
     const glow_awarded = this.glowService.computeGlow(
       dto.satisfaction,
       dto.bonus ?? EvaluationBonus.NONE,
-      donation.is_anonymous,
       donation.type,
     );
 
@@ -100,18 +103,25 @@ export class EvaluationService {
       }),
     );
 
-    await this.eventService.log(EventType.EVALUATION_CREATE, userId, { donation_id: donationId, satisfaction: dto.satisfaction, glow_awarded, wish_id: donation.wish.id });
+    await this.eventService.log(EventType.EVALUATION_CREATE, userId, {
+      donation_id: donationId,
+      satisfaction: dto.satisfaction,
+      glow_awarded,
+      wish_id: donation.wish.id,
+    });
 
     const donor = await this.userRepo.findOne({
       where: { id: donation.donor_id },
     });
+    if (!donor) throw new NotFoundException('Donateur introuvable');
+
     const count = await this.evaluationRepo.count({
       where: { donation: { donor_id: donation.donor_id } },
       relations: { donation: true },
     });
 
     // Capturer le grade avant mise à jour pour détecter une montée de grade
-    const previousGrade = donor!.grade;
+    const previousGrade = donor.grade;
     const newGrade = this.glowService.computeGrade(count);
     donor!.glow_points += glow_awarded;
     donor!.grade = newGrade;
@@ -120,29 +130,39 @@ export class EvaluationService {
     donation.wish.status = WishStatus.FULFILLED;
     await this.wishRepo.save(donation.wish);
 
-    const wishOwner = await this.userRepo.findOne({ where: { id: donation.wish.user_id } });
-
-    await this.notificationService.notify(donation.donor_id, NotificationType.EVALUATION_RECEIVED, {
-      glow_awarded,
-      recipient_pseudo: wishOwner!.pseudo,
-      wish_id: donation.wish.id,
+    const wishOwner = await this.userRepo.findOne({
+      where: { id: donation.wish.user_id },
     });
 
+    await this.notificationService.notify(
+      donation.donor_id,
+      NotificationType.EVALUATION_RECEIVED,
+      {
+        glow_awarded,
+        recipient_pseudo: wishOwner!.pseudo,
+        wish_id: donation.wish.id,
+      },
+    );
+
     if (newGrade !== previousGrade) {
-      await this.notificationService.notify(donation.donor_id, NotificationType.GRADE_UP, {
-        grade: newGrade,
-        previous_grade: previousGrade,
-      });
+      await this.notificationService.notify(
+        donation.donor_id,
+        NotificationType.GRADE_UP,
+        {
+          grade: newGrade,
+          previous_grade: previousGrade,
+        },
+      );
     }
 
-    if (donation.is_anonymous) {
-      await this.badgeService.award(donation.donor_id, BadgeType.MYSTERY_ANONYMOUS);
-    }
     if (
       evaluation.bonus === EvaluationBonus.WENT_ABOVE_AND_BEYOND &&
       evaluation.satisfaction === EvaluationSatisfaction.THRILLED
     ) {
-      await this.badgeService.award(donation.donor_id, BadgeType.MOST_IMPROBABLE_WISH);
+      await this.badgeService.award(
+        donation.donor_id,
+        BadgeType.MOST_IMPROBABLE_WISH,
+      );
     }
 
     return evaluation;

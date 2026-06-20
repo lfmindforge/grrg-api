@@ -93,7 +93,6 @@ export class FeedService {
         FROM wishes w
         JOIN users u ON u.id = w.user_id
         WHERE w.user_id IN (SELECT followed_id FROM follows WHERE follower_id = $1)
-          AND w.is_private = false
           AND w.status != 'cancelled'
 
         UNION ALL
@@ -114,7 +113,6 @@ export class FeedService {
         FROM wishes w
         JOIN users u ON u.id = w.user_id
         WHERE w.user_id IN (SELECT followed_id FROM follows WHERE follower_id = $1)
-          AND w.is_private = false
           AND w.status = 'fulfilled'
 
         UNION ALL
@@ -147,11 +145,11 @@ export class FeedService {
       SELECT COUNT(*)::int AS count FROM (
         SELECT w.id FROM wishes w
         WHERE w.user_id IN (SELECT followed_id FROM follows WHERE follower_id = $1)
-          AND w.is_private = false AND w.status != 'cancelled'
+          AND w.status != 'cancelled'
         UNION ALL
         SELECT w.id FROM wishes w
         WHERE w.user_id IN (SELECT followed_id FROM follows WHERE follower_id = $1)
-          AND w.is_private = false AND w.status = 'fulfilled'
+          AND w.status = 'fulfilled'
         UNION ALL
         SELECT n.id FROM notifications n
         WHERE n.user_id IN (SELECT followed_id FROM follows WHERE follower_id = $1)

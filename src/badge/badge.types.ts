@@ -1,5 +1,4 @@
 export enum BadgeType {
-  MYSTERY_ANONYMOUS = 'mystery_anonymous',
   MOST_IMPROBABLE_WISH = 'most_improbable_wish',
   FASTEST_DONOR = 'fastest_donor',
   BIGGEST_DONOR_MONTH = 'biggest_donor_month',

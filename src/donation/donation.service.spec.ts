@@ -17,6 +17,7 @@ import { BadgeType } from '../badge/badge.types';
 import { NotificationService } from '../notifications/notification.service';
 import { EventLogService } from '../event-log/event-log.service';
 import { EventType } from '../event-log/event-log.types';
+import { MessageService } from '../message/message.service';
 
 describe('DonationService', () => {
   let service: DonationService;
@@ -33,6 +34,7 @@ describe('DonationService', () => {
   let badgeService: { award: jest.Mock };
   let notificationService: { notify: jest.Mock };
   let mockEventService: { log: jest.Mock };
+  let mockMessageService: { sendMessage: jest.Mock };
 
   let mockQb: {
     innerJoinAndSelect: jest.Mock;
@@ -75,6 +77,7 @@ describe('DonationService', () => {
     badgeService = { award: jest.fn().mockResolvedValue(undefined) };
     notificationService = { notify: jest.fn().mockResolvedValue(undefined) };
     mockEventService = { log: jest.fn().mockResolvedValue(undefined) };
+    mockMessageService = { sendMessage: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -85,6 +88,7 @@ describe('DonationService', () => {
         { provide: BadgeService, useValue: badgeService },
         { provide: NotificationService, useValue: notificationService },
         { provide: EventLogService, useValue: mockEventService },
+        { provide: MessageService, useValue: mockMessageService },
       ],
     }).compile();
 
@@ -97,7 +101,6 @@ describe('DonationService', () => {
         wish_id: WISH_ID,
         type: DonationType.FINANCIAL,
         amount: 50,
-        is_anonymous: false,
       };
       const created = {
         id: 'don-uuid',
@@ -119,7 +122,6 @@ describe('DonationService', () => {
           type: DonationType.FINANCIAL,
           amount: 50,
           nature_description: null,
-          is_anonymous: false,
           status: DonationStatus.PENDING,
         }),
       );
@@ -165,29 +167,6 @@ describe('DonationService', () => {
 
       await expect(service.propose(OWNER_ID, dto)).rejects.toThrow(
         ForbiddenException,
-      );
-    });
-
-    it('enregistre is_anonymous=true quand demandé', async () => {
-      const dto: CreateDonationDto = {
-        wish_id: WISH_ID,
-        type: DonationType.FINANCIAL,
-        amount: 30,
-        is_anonymous: true,
-      };
-      wishRepo.findOne.mockResolvedValue({ ...mockWish });
-      donationRepo.create.mockReturnValue({ ...dto, donor_id: DONOR_ID });
-      donationRepo.save.mockResolvedValue({
-        ...dto,
-        donor_id: DONOR_ID,
-        status: DonationStatus.PENDING,
-      });
-      wishRepo.save.mockResolvedValue({ ...mockWish, status: WishStatus.IN_PROGRESS });
-
-      await service.propose(DONOR_ID, dto);
-
-      expect(donationRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ is_anonymous: true }),
       );
     });
 
@@ -266,8 +245,8 @@ describe('DonationService', () => {
     });
 
     it('envoie donation_received au créateur du souhait', async () => {
-      const dto: CreateDonationDto = { wish_id: WISH_ID, type: DonationType.FINANCIAL, amount: 50, is_anonymous: false };
-      const created = { id: 'don-uuid', wish_id: WISH_ID, donor_id: DONOR_ID, is_anonymous: false, status: DonationStatus.PENDING };
+      const dto: CreateDonationDto = { wish_id: WISH_ID, type: DonationType.FINANCIAL, amount: 50 };
+      const created = { id: 'don-uuid', wish_id: WISH_ID, donor_id: DONOR_ID, status: DonationStatus.PENDING };
       wishRepo.findOne.mockResolvedValue({ ...mockWish, title: 'Je veux un vélo' });
       donationRepo.create.mockReturnValue(created);
       donationRepo.save.mockResolvedValue(created);
@@ -278,24 +257,7 @@ describe('DonationService', () => {
       expect(notificationService.notify).toHaveBeenCalledWith(
         OWNER_ID,
         'donation_received',
-        expect.objectContaining({ donor_pseudo: 'DonorPseudo', is_anonymous: false, wish_id: WISH_ID }),
-      );
-    });
-
-    it('masque le pseudo si donation anonyme', async () => {
-      const dto: CreateDonationDto = { wish_id: WISH_ID, type: DonationType.FINANCIAL, amount: 50, is_anonymous: true };
-      const created = { id: 'don-uuid', wish_id: WISH_ID, donor_id: DONOR_ID, is_anonymous: true, status: DonationStatus.PENDING };
-      wishRepo.findOne.mockResolvedValue({ ...mockWish, title: 'Souhait' });
-      donationRepo.create.mockReturnValue(created);
-      donationRepo.save.mockResolvedValue(created);
-      wishRepo.save.mockResolvedValue({});
-
-      await service.propose(DONOR_ID, dto);
-
-      expect(notificationService.notify).toHaveBeenCalledWith(
-        OWNER_ID,
-        'donation_received',
-        expect.objectContaining({ is_anonymous: true }),
+        expect.objectContaining({ donor_pseudo: 'DonorPseudo', wish_id: WISH_ID }),
       );
     });
   });

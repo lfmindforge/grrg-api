@@ -31,8 +31,12 @@ export class MessageService {
     }
     // ordre canonique : plus petit UUID en user_a (correspond à la contrainte CHECK en DB)
     const [a, b] = [userAId, userBId].sort();
-    const existing = await this.convRepo.findOne({ where: { user_a_id: a, user_b_id: b } });
-    if (existing) return existing;
+    const existing = await this.convRepo.findOne({ where: { user_a_id: a, user_b_id: b }, withDeleted: true });
+    if (existing) {
+      // Restaure si précédemment supprimée (soft delete)
+      if (existing.deleted_at) await this.convRepo.recover(existing);
+      return existing;
+    }
     const conv = this.convRepo.create({ user_a_id: a, user_b_id: b });
     return this.convRepo.save(conv);
   }
@@ -72,10 +76,19 @@ export class MessageService {
     return dto;
   }
 
+  async deleteConversation(userId: string, conversationId: string): Promise<void> {
+    const conv = await this.convRepo.findOne({ where: { id: conversationId } });
+    if (!conv) throw new NotFoundException('Conversation introuvable');
+    if (conv.user_a_id !== userId && conv.user_b_id !== userId) {
+      throw new ForbiddenException('Accès refusé');
+    }
+    await this.convRepo.softRemove(conv);
+  }
+
   async getConversations(userId: string): Promise<ConversationResponseDto[]> {
     const convs = await this.convRepo
       .createQueryBuilder('c')
-      .where('c.user_a_id = :id OR c.user_b_id = :id', { id: userId })
+      .where('(c.user_a_id = :id OR c.user_b_id = :id) AND c.deleted_at IS NULL', { id: userId })
       .leftJoinAndSelect('c.user_a', 'ua')
       .leftJoinAndSelect('c.user_b', 'ub')
       .getMany();

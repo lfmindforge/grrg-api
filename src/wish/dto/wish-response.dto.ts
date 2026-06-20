@@ -9,6 +9,7 @@ export interface UserPublicDto {
   id: string;
   pseudo: string;
   avatar_url: string | null;
+  region: string | null;
   grade: string;
   glow_points: number;
 }
@@ -29,6 +30,8 @@ export interface WishPublicDto {
   donated_amount: number;
   comments_count?: number;
   reactions: ReactionCountDto[];
+  evaluation_note?: string | null;
+  evaluation_proof_url?: string | null;
 }
 
 export interface PaginatedWishesDto {

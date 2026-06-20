@@ -19,7 +19,6 @@ import {
   WishPreviewDto,
 } from './user.types';
 import { WishStatus } from '../wish/wish.types';
-import { DonationStatus } from '../donation/donation.types';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserExportDto } from './dto/user-export.dto';
@@ -91,8 +90,14 @@ export class UserService {
         this.wishRepo.find({
           where: { user_id: id, is_private: false, status: Not(WishStatus.CANCELLED) },
           order: { created_at: 'DESC' },
+        }).then((ws) => {
+          const rank: Record<string, number> = { pending: 1, in_progress: 2, fulfilled: 3 };
+          return ws.sort((a, b) => (rank[a.status] ?? 4) - (rank[b.status] ?? 4));
         }),
-        this.donationRepo.count({ where: { donor_id: id, status: DonationStatus.COMPLETED } }),
+        this.donationRepo.manager.query<[{ count: string }]>(
+          `SELECT COUNT(e.id)::int AS count FROM evaluations e JOIN donations d ON d.id = e.donation_id WHERE d.donor_id = $1`,
+          [id],
+        ).then(([r]) => parseInt(r!.count, 10)),
         this.followRepo.count({ where: { followed_id: id } }),
         this.followRepo.count({ where: { follower_id: id } }),
         this.badgeService.findByUser(id),
@@ -109,6 +114,7 @@ export class UserService {
       id: user.id,
       pseudo: user.pseudo,
       avatar_url: user.avatar_url,
+      region: user.region,
       grade: user.grade,
       glow_points: user.glow_points,
       badges: badgeEntities.map((b) => this.badgeService.toDto(b)),
@@ -131,6 +137,10 @@ export class UserService {
       const existing = await this.findByPseudo(dto.pseudo);
       if (existing) throw new ConflictException('Pseudo déjà utilisé');
       user!.pseudo = dto.pseudo;
+    }
+
+    if (dto.region !== undefined) {
+      user!.region = dto.region.trim() || null;
     }
 
     if (file) {

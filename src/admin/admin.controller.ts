@@ -13,6 +13,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AdminService } from './admin.service';
+import { AdminStatsDto } from './dto/admin-stats.dto';
 import { BanUserDto } from './dto/ban-user.dto';
 
 @ApiTags('admin')
@@ -21,6 +22,11 @@ import { BanUserDto } from './dto/ban-user.dto';
 @Roles('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
+
+  @Get('stats')
+  getStats(): Promise<AdminStatsDto> {
+    return this.adminService.getStats();
+  }
 
   @Get('users/search')
   searchUsers(@Query('q') q: string) {

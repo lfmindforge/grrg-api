@@ -26,6 +26,9 @@ export class User {
   @Column({ type: 'text', nullable: true })
   avatar_url!: string | null;
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  region!: string | null;
+
   @Column({ type: 'varchar', length: 20, nullable: true })
   oauth_provider!: string | null;
 

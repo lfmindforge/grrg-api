@@ -9,9 +9,10 @@ import { DonationService } from './donation.service';
 import { BadgeModule } from '../badge/badge.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EventLogModule } from '../event-log/event-log.module';
+import { MessageModule } from '../message/message.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Donation, Evaluation, Wish, User]), BadgeModule, NotificationsModule, EventLogModule],
+  imports: [TypeOrmModule.forFeature([Donation, Evaluation, Wish, User]), BadgeModule, NotificationsModule, EventLogModule, MessageModule],
   controllers: [DonationController],
   providers: [DonationService],
 })

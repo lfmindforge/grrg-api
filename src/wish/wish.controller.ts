@@ -22,6 +22,7 @@ import type { Request } from 'express';
 import { ApiTags, ApiOperation, ApiCookieAuth } from '@nestjs/swagger';
 import { WishService } from './wish.service';
 import { Public } from '../common/decorators/public.decorator';
+import { OptionalAuth } from '../common/decorators/optional-auth.decorator';
 import { CreateWishDto } from './dto/create-wish.dto';
 import { UpdateWishDto } from './dto/update-wish.dto';
 import { QueryWishDto } from './dto/query-wish.dto';
@@ -57,10 +58,13 @@ export class WishController {
   }
 
   @Get(':id')
-  @Public()
+  @OptionalAuth()
   @ApiOperation({ summary: 'Détail d\'un souhait' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.wishService.findOne(id);
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request & { user?: { id: string } },
+  ) {
+    return this.wishService.findOne(id, req.user?.id ?? null);
   }
 
   @Put(':id')

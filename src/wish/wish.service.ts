@@ -61,13 +61,20 @@ export class WishService {
     }
 
     const sortOrder: 'ASC' | 'DESC' = query.order === 'asc' ? 'ASC' : 'DESC';
+
+    // Tri primaire : pending → in_progress → fulfilled
+    qb.addSelect(
+      `CASE wish.status WHEN 'pending' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'fulfilled' THEN 3 ELSE 4 END`,
+      'status_order',
+    ).orderBy('status_order', 'ASC');
+
     if ((query.sort ?? 'date') === 'popularity') {
       qb.addSelect(
-        '(SELECT COUNT(d.id) FROM donations d WHERE d.wish_id = wish.id)',
-        'donations_count',
-      ).orderBy('donations_count', sortOrder);
+        '(SELECT COUNT(r.id) FROM reactions r WHERE r.wish_id = wish.id)',
+        'reactions_count',
+      ).addOrderBy('reactions_count', sortOrder);
     } else {
-      qb.orderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
+      qb.addOrderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
     }
 
     qb.addSelect(
@@ -102,7 +109,7 @@ export class WishService {
     return { data: data as unknown as WishPublicDto[], total, page, limit };
   }
 
-  async findOne(id: string): Promise<WishPublicDto> {
+  async findOne(id: string, viewerId: string | null = null): Promise<WishPublicDto> {
     const { entities, raw } = await this.wishRepo
       .createQueryBuilder('wish')
       .leftJoinAndSelect('wish.user', 'user')
@@ -127,22 +134,39 @@ export class WishService {
           ) _r)`,
         'reactions',
       )
-      .where('wish.id = :id AND wish.is_private = :isPrivate', {
-        id,
-        isPrivate: false,
-      })
+      .addSelect(
+        `(SELECT e.description FROM evaluations e JOIN donations d ON d.id = e.donation_id WHERE d.wish_id = wish.id AND d.status = 'completed' AND e.deleted_at IS NULL LIMIT 1)`,
+        'evaluation_note',
+      )
+      .addSelect(
+        `(SELECT e.proof_url FROM evaluations e JOIN donations d ON d.id = e.donation_id WHERE d.wish_id = wish.id AND d.status = 'completed' AND e.deleted_at IS NULL LIMIT 1)`,
+        'evaluation_proof_url',
+      )
+      .where('wish.id = :id', { id })
       .andWhere('wish.status != :expired', { expired: WishStatus.EXPIRED })
       .andWhere('(wish.expires_at IS NULL OR wish.expires_at > :now)', { now: new Date() })
       .getRawAndEntities();
 
-    if (!entities[0]) {
-      throw new NotFoundException('Souhait introuvable');
+    const wish = entities[0];
+    if (!wish) throw new NotFoundException('Souhait introuvable');
+
+    if (wish.is_private) {
+      const isOwner = viewerId === wish.user_id;
+      const isFollower = viewerId
+        ? (await this.wishRepo.manager.query<{ exists: boolean }[]>(
+            `SELECT EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND followed_id = $2) AS exists`,
+            [viewerId, wish.user_id],
+          ))[0]?.exists ?? false
+        : false;
+      if (!isOwner && !isFollower) throw new NotFoundException('Souhait introuvable');
     }
 
     const donated_amount = parseFloat(raw[0]?.donated_amount ?? '0');
     const comments_count = parseInt(raw[0]?.comments_count ?? '0', 10);
     const reactions = raw[0]?.reactions ?? [];
-    return { ...entities[0], donated_amount, comments_count, reactions } as unknown as WishPublicDto;
+    const evaluation_note: string | null = raw[0]?.evaluation_note ?? null;
+    const evaluation_proof_url: string | null = raw[0]?.evaluation_proof_url ?? null;
+    return { ...entities[0], donated_amount, comments_count, reactions, evaluation_note, evaluation_proof_url } as unknown as WishPublicDto;
   }
 
   private resolveSortField(sort: string): string {
@@ -165,7 +189,14 @@ export class WishService {
     }
 
     const sortOrder: 'ASC' | 'DESC' = query.order === 'asc' ? 'ASC' : 'DESC';
-    qb.orderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
+
+    // Tri primaire : pending → in_progress → fulfilled
+    qb.addSelect(
+      `CASE wish.status WHEN 'pending' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'fulfilled' THEN 3 ELSE 4 END`,
+      'status_order',
+    ).orderBy('status_order', 'ASC')
+      .addOrderBy(this.resolveSortField(query.sort ?? 'date'), sortOrder);
+
     qb.skip((page - 1) * limit).take(limit);
 
     const [data, total] = await qb.getManyAndCount();
@@ -223,14 +254,10 @@ export class WishService {
   }
 
   async findCategories(): Promise<string[]> {
-    const rows = await this.wishRepo
-      .createQueryBuilder('wish')
-      .select('wish.category', 'category')
-      .distinct(true)
-      .where('wish.is_private = :isPrivate', { isPrivate: false })
-      .orderBy('wish.category', 'ASC')
-      .getRawMany<{ category: string }>();
-    return rows.map((r) => r.category);
+    const rows = await this.wishRepo.manager.query<{ name: string }[]>(
+      `SELECT name FROM categories ORDER BY name ASC`,
+    );
+    return rows.map((r) => r.name);
   }
 
   private async findOwnedWishOrThrow(

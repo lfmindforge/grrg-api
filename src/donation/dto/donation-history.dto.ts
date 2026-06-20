@@ -20,7 +20,6 @@ export class DonationHistoryItemDto {
   status!: DonationStatus;
   amount!: number | null;
   nature_description!: string | null;
-  is_anonymous!: boolean;
   created_at!: Date;
   wish!: WishPreviewInDonationDto;
   evaluation!: EvaluationSummaryInDonationDto | null;
