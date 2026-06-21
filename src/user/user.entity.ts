@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -25,6 +26,9 @@ export class User {
   @Column({ type: 'text', nullable: true })
   avatar_url!: string | null;
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  region!: string | null;
+
   @Column({ type: 'varchar', length: 20, nullable: true })
   oauth_provider!: string | null;
 
@@ -37,7 +41,16 @@ export class User {
   @Column({ length: 30, default: 'etincelle' })
   grade!: string;
 
+  @Column({ type: 'varchar', length: 10, default: 'user' })
+  role!: 'user' | 'admin';
+
+  @Column({ type: 'timestamptz', nullable: true, default: null })
+  banned_until!: Date | null;
+
   @CreateDateColumn()
   created_at!: Date;
+
+  @DeleteDateColumn()
+  deleted_at!: Date | null;
 }
 // "!" promet une valeur car c'est au runtime que l'hydratation se fait par TypeOrm et non par le constructeur.

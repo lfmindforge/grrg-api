@@ -1,4 +1,5 @@
 import { WishStatus } from '../wish/wish.types';
+import { BadgeDto } from '../badge/badge.types';
 
 export type CreateUserData = {
   email: string;
@@ -6,6 +7,7 @@ export type CreateUserData = {
   pseudo: string;
   birthdate?: Date | null;
   avatar_url?: string | null;
+  region?: string | null;
   oauth_provider?: string | null;
   oauth_id?: string | null;
 };
@@ -17,13 +19,24 @@ export interface WishPreviewDto {
   status: WishStatus;
 }
 
-export interface UserPublicProfileDto {
+export interface UserSearchResultDto {
   id: string;
   pseudo: string;
   avatar_url: string | null;
   grade: string;
   glow_points: number;
-  badges: unknown[]; // placeholder — branché en US-014
-  donations_count: number; // placeholder — 0 jusqu'à US-009
+}
+
+export interface UserPublicProfileDto {
+  id: string;
+  pseudo: string;
+  avatar_url: string | null;
+  region: string | null;
+  grade: string;
+  glow_points: number;
+  badges: BadgeDto[];
+  donations_count: number;
+  followers_count: number;
+  following_count: number;
   gallery: WishPreviewDto[];
 }

@@ -13,12 +13,15 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 describe('WishService', () => {
   let service: WishService;
   let wishRepo: {
     create: jest.Mock;
     save: jest.Mock;
+    softRemove: jest.Mock;
     findOne: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
@@ -33,11 +36,13 @@ describe('WishService', () => {
     distinct: jest.Mock;
     addSelect: jest.Mock;
     getManyAndCount: jest.Mock;
+    getCount: jest.Mock;
     getOne: jest.Mock;
     getRawMany: jest.Mock;
     getRawAndEntities: jest.Mock;
   };
   let supabaseStorage: { upload: jest.Mock; delete: jest.Mock; extractPath: jest.Mock };
+  let mockEventService: { log: jest.Mock };
 
   beforeEach(async () => {
     mockQb = {
@@ -51,6 +56,7 @@ describe('WishService', () => {
       distinct: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
       getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+      getCount: jest.fn().mockResolvedValue(0),
       getOne: jest.fn().mockResolvedValue(null),
       getRawMany: jest.fn().mockResolvedValue([]),
       getRawAndEntities: jest.fn().mockResolvedValue({ entities: [], raw: [] }),
@@ -58,6 +64,7 @@ describe('WishService', () => {
     wishRepo = {
       create: jest.fn(),
       save: jest.fn(),
+      softRemove: jest.fn(),
       findOne: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(mockQb),
     };
@@ -66,6 +73,7 @@ describe('WishService', () => {
       delete: jest.fn().mockResolvedValue(undefined),
       extractPath: jest.fn().mockReturnValue('user-id/photo.jpg'),
     };
+    mockEventService = { log: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -76,6 +84,7 @@ describe('WishService', () => {
           provide: ConfigService,
           useValue: { getOrThrow: () => 'wishes-media' },
         },
+        { provide: EventLogService, useValue: mockEventService },
       ],
     }).compile();
 
@@ -88,7 +97,11 @@ describe('WishService', () => {
   describe('findPublic()', () => {
     it('retourne une réponse paginée avec les valeurs par défaut (page=1, limit=20)', async () => {
       const wish = { id: 'uuid-1', title: 'Test', is_private: false };
-      mockQb.getManyAndCount.mockResolvedValue([[wish], 1]);
+      mockQb.getCount.mockResolvedValue(1);
+      mockQb.getRawAndEntities.mockResolvedValue({
+        entities: [wish],
+        raw: [{ comments_count: '0' }],
+      });
 
       const result: PaginatedWishesDto = await service.findPublic({});
 
@@ -101,12 +114,15 @@ describe('WishService', () => {
         'wish.is_private = :isPrivate',
         { isPrivate: false },
       );
-      expect(result).toEqual({ data: [wish], total: 1, page: 1, limit: 20 });
+      expect(result).toEqual({
+        data: [{ ...wish, comments_count: 0, reactions: [] }],
+        total: 1,
+        page: 1,
+        limit: 20,
+      });
     });
 
     it("exclut les souhaits 'cancelled' par défaut (aucun filtre status)", async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
       await service.findPublic({});
 
       expect(mockQb.andWhere).toHaveBeenCalledWith(
@@ -116,8 +132,6 @@ describe('WishService', () => {
     });
 
     it("inclut 'cancelled' si status=cancelled est fourni explicitement", async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
       await service.findPublic({ status: WishStatus.CANCELLED });
 
       expect(mockQb.andWhere).toHaveBeenCalledWith('wish.status = :status', {
@@ -126,8 +140,6 @@ describe('WishService', () => {
     });
 
     it('filtre par category (insensible à la casse)', async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
       await service.findPublic({ category: 'Électronique' });
 
       expect(mockQb.andWhere).toHaveBeenCalledWith(
@@ -136,20 +148,29 @@ describe('WishService', () => {
       );
     });
 
-    it('recherche par mot-clé (ILIKE sur title et description)', async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
+    it('recherche par mot-clé simple (ILIKE sur title et description)', async () => {
       await service.findPublic({ search: 'vélo' });
 
       expect(mockQb.andWhere).toHaveBeenCalledWith(
-        '(wish.title ILIKE :search OR wish.description ILIKE :search)',
-        { search: '%vélo%' },
+        '(wish.title ILIKE :w0 OR wish.description ILIKE :w0)',
+        { w0: '%vélo%' },
+      );
+    });
+
+    it('recherche multi-mots : applique un ILIKE par mot en AND', async () => {
+      await service.findPublic({ search: 'vélo rouge' });
+
+      expect(mockQb.andWhere).toHaveBeenCalledWith(
+        '(wish.title ILIKE :w0 OR wish.description ILIKE :w0)',
+        { w0: '%vélo%' },
+      );
+      expect(mockQb.andWhere).toHaveBeenCalledWith(
+        '(wish.title ILIKE :w1 OR wish.description ILIKE :w1)',
+        { w1: '%rouge%' },
       );
     });
 
     it('trie par popularité via COUNT des donations sur le souhait', async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
       await service.findPublic({ sort: 'popularity' });
 
       expect(mockQb.addSelect).toHaveBeenCalledWith(
@@ -160,8 +181,6 @@ describe('WishService', () => {
     });
 
     it('applique la pagination : page=2, limit=10 → skip=10, take=10', async () => {
-      mockQb.getManyAndCount.mockResolvedValue([[], 0]);
-
       const result = await service.findPublic({ page: 2, limit: 10 });
 
       expect(mockQb.skip).toHaveBeenCalledWith(10);
@@ -324,6 +343,37 @@ describe('WishService', () => {
 
       expect(wishRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ is_private: true }),
+      );
+    });
+
+    it('avec expires_at : passe la date convertie en Date à l\'entité', async () => {
+      const dto: CreateWishDto = {
+        title: 'Test',
+        description: 'Desc',
+        category: 'cat',
+        expires_at: '2026-12-31T23:59:59.000Z',
+      };
+      const savedWish = { id: 'w1', user_id: 'u1', expires_at: new Date(dto.expires_at!) };
+      wishRepo.create.mockReturnValue(savedWish);
+      wishRepo.save.mockResolvedValue(savedWish);
+
+      await service.create('u1', dto, []);
+
+      expect(wishRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ expires_at: new Date('2026-12-31T23:59:59.000Z') }),
+      );
+    });
+
+    it('sans expires_at : passe null à l\'entité', async () => {
+      const dto: CreateWishDto = { title: 'Test', description: 'Desc', category: 'cat' };
+      const savedWish = { id: 'w1', user_id: 'u1', expires_at: null };
+      wishRepo.create.mockReturnValue(savedWish);
+      wishRepo.save.mockResolvedValue(savedWish);
+
+      await service.create('u1', dto, []);
+
+      expect(wishRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ expires_at: null }),
       );
     });
   });
@@ -545,26 +595,23 @@ describe('WishService', () => {
       );
     });
 
-    it('passe status = CANCELLED et sauvegarde', async () => {
+    it('passe status = CANCELLED et soft-supprime', async () => {
       const wish = {
         id: 'uuid-1',
         user_id: 'user-id',
         status: WishStatus.PENDING,
       };
       wishRepo.findOne.mockResolvedValue(wish);
-      wishRepo.save.mockResolvedValue({
-        ...wish,
-        status: WishStatus.CANCELLED,
-      });
+      wishRepo.softRemove.mockResolvedValue({});
 
       await service.softDelete('uuid-1', 'user-id');
 
-      expect(wishRepo.save).toHaveBeenCalledWith(
+      expect(wishRepo.softRemove).toHaveBeenCalledWith(
         expect.objectContaining({ status: WishStatus.CANCELLED }),
       );
     });
 
-    it('idempotent — si déjà CANCELLED, ne rappelle pas save()', async () => {
+    it('idempotent — si déjà CANCELLED, ne rappelle pas softRemove()', async () => {
       wishRepo.findOne.mockResolvedValue({
         id: 'uuid-1',
         user_id: 'user-id',
@@ -574,7 +621,7 @@ describe('WishService', () => {
 
       await service.softDelete('uuid-1', 'user-id');
 
-      expect(wishRepo.save).not.toHaveBeenCalled();
+      expect(wishRepo.softRemove).not.toHaveBeenCalled();
       expect(supabaseStorage.delete).not.toHaveBeenCalled();
     });
 
@@ -587,13 +634,13 @@ describe('WishService', () => {
         media_urls: [mediaUrl],
       });
       supabaseStorage.extractPath.mockReturnValue('user-id/photo.jpg');
-      wishRepo.save.mockResolvedValue({});
+      wishRepo.softRemove.mockResolvedValue({});
 
       await service.softDelete('uuid-1', 'user-id');
 
       expect(supabaseStorage.extractPath).toHaveBeenCalledWith('wishes-media', mediaUrl);
       expect(supabaseStorage.delete).toHaveBeenCalledWith('wishes-media', ['user-id/photo.jpg']);
-      expect(wishRepo.save).toHaveBeenCalledWith(
+      expect(wishRepo.softRemove).toHaveBeenCalledWith(
         expect.objectContaining({ status: WishStatus.CANCELLED }),
       );
     });
@@ -605,12 +652,12 @@ describe('WishService', () => {
         status: WishStatus.PENDING,
         media_urls: [],
       });
-      wishRepo.save.mockResolvedValue({});
+      wishRepo.softRemove.mockResolvedValue({});
 
       await service.softDelete('uuid-1', 'user-id');
 
       expect(supabaseStorage.delete).not.toHaveBeenCalled();
-      expect(wishRepo.save).toHaveBeenCalledWith(
+      expect(wishRepo.softRemove).toHaveBeenCalledWith(
         expect.objectContaining({ status: WishStatus.CANCELLED }),
       );
     });
@@ -642,6 +689,50 @@ describe('WishService', () => {
       const result = await service.findCategories();
 
       expect(result).toEqual([]);
+    });
+  });
+
+  // --- événements ---
+
+  describe('événements EventLog', () => {
+    it('log WISH_CREATE après la sauvegarde', async () => {
+      const savedWish = { id: 'uuid-1', title: 'Mon souhait', category: 'Électronique', is_private: false, user_id: 'user-id', media_urls: [], status: WishStatus.PENDING };
+      wishRepo.create.mockReturnValue(savedWish);
+      wishRepo.save.mockResolvedValue(savedWish);
+
+      await service.create('user-id', { title: 'Mon souhait', description: 'desc', category: 'Électronique' }, []);
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.WISH_CREATE,
+        'user-id',
+        expect.objectContaining({ title: 'Mon souhait', category: 'Électronique' }),
+      );
+    });
+
+    it('log WISH_UPDATE avec updated_fields', async () => {
+      wishRepo.findOne.mockResolvedValue({ id: 'uuid-1', user_id: 'user-id', title: 'Ancien', status: WishStatus.PENDING, media_urls: [] });
+      wishRepo.save.mockImplementation((w) => Promise.resolve(w));
+
+      await service.update('uuid-1', 'user-id', { title: 'Nouveau' });
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.WISH_UPDATE,
+        'user-id',
+        expect.objectContaining({ wish_id: 'uuid-1', updated_fields: ['title'] }),
+      );
+    });
+
+    it('log WISH_DELETE avant le soft-remove', async () => {
+      wishRepo.findOne.mockResolvedValue({ id: 'uuid-1', user_id: 'user-id', title: 'Mon souhait', status: WishStatus.PENDING, media_urls: [] });
+      wishRepo.softRemove.mockResolvedValue({});
+
+      await service.softDelete('uuid-1', 'user-id');
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.WISH_DELETE,
+        'user-id',
+        expect.objectContaining({ wish_id: 'uuid-1', title: 'Mon souhait' }),
+      );
     });
   });
 });

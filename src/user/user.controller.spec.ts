@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import { ParseUUIDPipe } from '@nestjs/common';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
+import { FollowService } from '../follow/follow.service';
 
 describe('UserController', () => {
   let controller: UserController;
@@ -10,15 +11,34 @@ describe('UserController', () => {
     getProfile: jest.fn(),
     updateMe: jest.fn(),
   };
+  const mockFollowService = {
+    getSuggestions: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UserController],
-      providers: [{ provide: UserService, useValue: mockUserService }],
+      providers: [
+        { provide: UserService, useValue: mockUserService },
+        { provide: FollowService, useValue: mockFollowService },
+      ],
     }).compile();
 
     controller = module.get<UserController>(UserController);
+  });
+
+  describe('getSuggestions()', () => {
+    it('délègue à FollowService.getSuggestions', async () => {
+      const req = { user: { id: 'user-1' } };
+      const suggestions = [{ id: 'user-2', pseudo: 'bob', avatar_url: null, grade: 'lumiere', glow_points: 50 }];
+      mockFollowService.getSuggestions.mockResolvedValue(suggestions);
+
+      const result = await controller.getSuggestions(req);
+
+      expect(mockFollowService.getSuggestions).toHaveBeenCalledWith('user-1');
+      expect(result).toBe(suggestions);
+    });
   });
 
   describe('getProfile()', () => {

@@ -7,9 +7,11 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RefreshToken } from './entities/refresh-token.entity';
+import { User } from '../user/user.entity';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { GitHubStrategy } from './strategies/github.strategy';
+import { EventLogModule } from '../event-log/event-log.module';
 
 @Module({
   imports: [
@@ -17,8 +19,9 @@ import { GitHubStrategy } from './strategies/github.strategy';
     PassportModule,
     // Les secrets sont passés dynamiquement via ConfigService dans signAsyn/verify
     JwtModule.register({}),
-    TypeOrmModule.forFeature([RefreshToken]),
+    TypeOrmModule.forFeature([RefreshToken, User]),
     ConfigModule,
+    EventLogModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, GoogleStrategy, GitHubStrategy],

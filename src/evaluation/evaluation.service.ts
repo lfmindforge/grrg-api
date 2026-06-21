@@ -12,12 +12,21 @@ import { Evaluation } from '../donation/evaluation.entity';
 import { Donation } from '../donation/donation.entity';
 import { User } from '../user/user.entity';
 import { Wish } from '../wish/wish.entity';
-import { DonationStatus, EvaluationBonus } from '../donation/donation.types';
+import {
+  DonationStatus,
+  EvaluationBonus,
+  EvaluationSatisfaction,
+} from '../donation/donation.types';
 import { WishStatus } from '../wish/wish.types';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import { GlowService } from '../common/glow.service';
 import { NotificationService } from '../notifications/notification.service';
+import { NotificationType } from '../notifications/notification.types';
+import { BadgeService } from '../badge/badge.service';
+import { BadgeType } from '../badge/badge.types';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 @Injectable()
 export class EvaluationService {
@@ -34,6 +43,8 @@ export class EvaluationService {
     private readonly config: ConfigService,
     private readonly glowService: GlowService,
     private readonly notificationService: NotificationService,
+    private readonly badgeService: BadgeService,
+    private readonly eventService: EventLogService,
   ) {}
 
   async evaluate(
@@ -78,7 +89,6 @@ export class EvaluationService {
     const glow_awarded = this.glowService.computeGlow(
       dto.satisfaction,
       dto.bonus ?? EvaluationBonus.NONE,
-      donation.is_anonymous,
       donation.type,
     );
 
@@ -93,16 +103,25 @@ export class EvaluationService {
       }),
     );
 
+    await this.eventService.log(EventType.EVALUATION_CREATE, userId, {
+      donation_id: donationId,
+      satisfaction: dto.satisfaction,
+      glow_awarded,
+      wish_id: donation.wish.id,
+    });
+
     const donor = await this.userRepo.findOne({
       where: { id: donation.donor_id },
     });
+    if (!donor) throw new NotFoundException('Donateur introuvable');
+
     const count = await this.evaluationRepo.count({
       where: { donation: { donor_id: donation.donor_id } },
       relations: { donation: true },
     });
 
     // Capturer le grade avant mise à jour pour détecter une montée de grade
-    const previousGrade = donor!.grade;
+    const previousGrade = donor.grade;
     const newGrade = this.glowService.computeGrade(count);
     donor!.glow_points += glow_awarded;
     donor!.grade = newGrade;
@@ -111,17 +130,40 @@ export class EvaluationService {
     donation.wish.status = WishStatus.FULFILLED;
     await this.wishRepo.save(donation.wish);
 
-    const notificationType =
-      newGrade !== previousGrade ? 'grade_up' : 'evaluation_received';
-    const progression = this.glowService.getGradeProgression(count);
-    await this.notificationService.create(donation.donor_id, notificationType, {
-      glowAwarded: glow_awarded,
-      totalGlowPoints: donor!.glow_points,
-      currentGrade: newGrade,
-      nextGrade: progression.nextGrade,
-      donsManquants: progression.donsManquants,
+    const wishOwner = await this.userRepo.findOne({
+      where: { id: donation.wish.user_id },
     });
-    // TODO US-020 — NotificationService.pushSSE(donation.donor_id, notification)
+
+    await this.notificationService.notify(
+      donation.donor_id,
+      NotificationType.EVALUATION_RECEIVED,
+      {
+        glow_awarded,
+        recipient_pseudo: wishOwner!.pseudo,
+        wish_id: donation.wish.id,
+      },
+    );
+
+    if (newGrade !== previousGrade) {
+      await this.notificationService.notify(
+        donation.donor_id,
+        NotificationType.GRADE_UP,
+        {
+          grade: newGrade,
+          previous_grade: previousGrade,
+        },
+      );
+    }
+
+    if (
+      evaluation.bonus === EvaluationBonus.WENT_ABOVE_AND_BEYOND &&
+      evaluation.satisfaction === EvaluationSatisfaction.THRILLED
+    ) {
+      await this.badgeService.award(
+        donation.donor_id,
+        BadgeType.MOST_IMPROBABLE_WISH,
+      );
+    }
 
     return evaluation;
   }

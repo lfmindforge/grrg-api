@@ -59,11 +59,11 @@ export class LeaderboardService {
         }>
       >(
         `SELECT id AS user_id, pseudo, avatar_url, grade, glow_points AS score
-         FROM users ORDER BY glow_points DESC LIMIT $1 OFFSET $2`,
+         FROM users WHERE glow_points > 0 ORDER BY glow_points DESC LIMIT $1 OFFSET $2`,
         [limit, offset],
       ),
       this.dataSource.query<[{ count: string }]>(
-        `SELECT COUNT(*)::int AS count FROM users`,
+        `SELECT COUNT(*)::int AS count FROM users WHERE glow_points > 0`,
       ),
     ]);
     return {

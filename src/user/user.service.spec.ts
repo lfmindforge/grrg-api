@@ -5,14 +5,21 @@ import { ConfigService } from '@nestjs/config';
 import { User } from './user.entity';
 import { Wish } from '../wish/wish.entity';
 import { Donation } from '../donation/donation.entity';
+import { Follow } from '../follow/follow.entity';
+import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { UserService } from './user.service';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { WishStatus } from '../wish/wish.types';
+import { BadgeService } from '../badge/badge.service';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 const mockUserRepo = {
   findOne: jest.fn(),
   create: jest.fn(),
   save: jest.fn(),
+  softRemove: jest.fn(),
+  createQueryBuilder: jest.fn(),
 };
 
 const mockWishRepo = {
@@ -21,6 +28,16 @@ const mockWishRepo = {
 
 const mockDonationRepo = {
   count: jest.fn(),
+  find: jest.fn(),
+  createQueryBuilder: jest.fn(),
+};
+
+const mockRefreshTokenRepo = {
+  delete: jest.fn(),
+};
+
+const mockFollowRepo = {
+  count: jest.fn(),
 };
 
 const mockStorage = {
@@ -28,6 +45,13 @@ const mockStorage = {
   delete: jest.fn().mockResolvedValue(undefined),
   extractPath: jest.fn().mockReturnValue('user-id/old-avatar.jpg'),
 };
+
+const mockBadgeService = {
+  findByUser: jest.fn().mockResolvedValue([]),
+  toDto: jest.fn((b: unknown) => b),
+};
+
+const mockEventService = { log: jest.fn().mockResolvedValue(undefined) };
 
 describe('UserService', () => {
   let service: UserService;
@@ -39,8 +63,12 @@ describe('UserService', () => {
         { provide: getRepositoryToken(User), useValue: mockUserRepo },
         { provide: getRepositoryToken(Wish), useValue: mockWishRepo },
         { provide: getRepositoryToken(Donation), useValue: mockDonationRepo },
+        { provide: getRepositoryToken(Follow), useValue: mockFollowRepo },
+        { provide: getRepositoryToken(RefreshToken), useValue: mockRefreshTokenRepo },
         { provide: SupabaseStorageService, useValue: mockStorage },
         { provide: ConfigService, useValue: { getOrThrow: () => 'avatars' } },
+        { provide: BadgeService, useValue: mockBadgeService },
+        { provide: EventLogService, useValue: mockEventService },
       ],
     }).compile();
 
@@ -146,6 +174,7 @@ describe('UserService', () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       const result = await service.getProfile('user-id');
 
@@ -157,6 +186,8 @@ describe('UserService', () => {
         glow_points: 0,
         badges: [],
         donations_count: 0,
+        followers_count: 0,
+        following_count: 0,
         gallery: [],
       });
     });
@@ -165,6 +196,7 @@ describe('UserService', () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(5);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       const result = await service.getProfile('user-id');
 
@@ -183,6 +215,7 @@ describe('UserService', () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       await service.getProfile('user-id');
 
@@ -197,6 +230,7 @@ describe('UserService', () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       await service.getProfile('user-id');
 
@@ -210,6 +244,7 @@ describe('UserService', () => {
     it('cover = media_urls[0] si présent, null sinon', async () => {
       mockUserRepo.findOne.mockResolvedValue(mockUser);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
       mockWishRepo.find.mockResolvedValue([
         {
           id: 'wish-1',
@@ -242,6 +277,44 @@ describe('UserService', () => {
         },
       ]);
     });
+
+    it('retourne followers_count et following_count', async () => {
+      mockUserRepo.findOne.mockResolvedValue(mockUser);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count
+        .mockResolvedValueOnce(4) // followers
+        .mockResolvedValueOnce(2); // following
+
+      const result = await service.getProfile('user-id');
+
+      expect(result.followers_count).toBe(4);
+      expect(result.following_count).toBe(2);
+    });
+
+    it('followers_count est 0 si aucun follower', async () => {
+      mockUserRepo.findOne.mockResolvedValue(mockUser);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
+
+      const result = await service.getProfile('user-id');
+
+      expect(result.followers_count).toBe(0);
+      expect(result.following_count).toBe(0);
+    });
+
+    it('les compteurs sont calculés pour le bon userId', async () => {
+      mockUserRepo.findOne.mockResolvedValue(mockUser);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
+
+      await service.getProfile('user-id');
+
+      expect(mockFollowRepo.count).toHaveBeenCalledWith({ where: { followed_id: 'user-id' } });
+      expect(mockFollowRepo.count).toHaveBeenCalledWith({ where: { follower_id: 'user-id' } });
+    });
   });
 
   // --- updateMe() ---
@@ -270,6 +343,7 @@ describe('UserService', () => {
       });
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       const result = await service.updateMe('user-id', { pseudo: 'nouveau' });
 
@@ -297,6 +371,7 @@ describe('UserService', () => {
       mockUserRepo.save.mockResolvedValue(existingUser);
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       await expect(
         service.updateMe('user-id', { pseudo: 'alice' }),
@@ -321,6 +396,7 @@ describe('UserService', () => {
       });
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       const result = await service.updateMe('user-id', {}, file);
 
@@ -354,6 +430,7 @@ describe('UserService', () => {
       mockUserRepo.save.mockResolvedValue({ ...userWithAvatar, avatar_url: newUrl });
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       await service.updateMe('user-id', {}, file);
 
@@ -368,11 +445,213 @@ describe('UserService', () => {
       mockUserRepo.save.mockResolvedValue(existingUser);
       mockWishRepo.find.mockResolvedValue([]);
       mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
 
       const result = await service.updateMe('user-id', {});
 
       expect(mockUserRepo.save).toHaveBeenCalled();
       expect(result.pseudo).toBe('alice');
+    });
+
+    it('log user.update après mise à jour réussie', async () => {
+      mockUserRepo.findOne
+        .mockResolvedValueOnce(existingUser)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existingUser);
+      mockUserRepo.save.mockResolvedValue(existingUser);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.count.mockResolvedValue(0);
+      mockFollowRepo.count.mockResolvedValue(0);
+
+      await service.updateMe('user-id', { pseudo: 'nouveau' });
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.USER_UPDATE,
+        'user-id',
+        expect.objectContaining({ updated_fields: ['pseudo'] }),
+      );
+    });
+  });
+
+  // --- deleteMe() ---
+
+  describe('deleteMe()', () => {
+    const baseUser: Partial<User> = {
+      id: 'user-id',
+      email: 'alice@test.com',
+      pseudo: 'alice',
+      avatar_url: null,
+      password_hash: 'hashed',
+      oauth_id: null,
+    };
+
+    beforeEach(() => {
+      mockUserRepo.softRemove.mockResolvedValue(undefined);
+      mockRefreshTokenRepo.delete.mockResolvedValue(undefined);
+    });
+
+    it('anonymise les PII et appelle softRemove', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ ...baseUser });
+
+      await service.deleteMe('user-id');
+
+      expect(mockUserRepo.softRemove).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pseudo: 'utilisateur_supprimé',
+          avatar_url: null,
+          password_hash: null,
+          oauth_id: null,
+        }),
+      );
+      const saved = mockUserRepo.softRemove.mock.calls[0][0] as User;
+      expect(saved.email).toMatch(/^deleted_.+@anon\.grrg$/);
+    });
+
+    it('révoque tous les refresh tokens', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ ...baseUser });
+
+      await service.deleteMe('user-id');
+
+      expect(mockRefreshTokenRepo.delete).toHaveBeenCalledWith({ user_id: 'user-id' });
+    });
+
+    it('supprime l\'avatar Supabase si avatar_url présent', async () => {
+      mockUserRepo.findOne.mockResolvedValue({
+        ...baseUser,
+        avatar_url: 'https://cdn.example.com/avatars/user-id/avatar.jpg',
+      });
+      mockStorage.extractPath.mockReturnValue('user-id/avatar.jpg');
+
+      await service.deleteMe('user-id');
+
+      expect(mockStorage.delete).toHaveBeenCalledWith('avatars', ['user-id/avatar.jpg']);
+    });
+
+    it('ne tente pas de supprimer Supabase si avatar_url est null', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ ...baseUser, avatar_url: null });
+      mockStorage.delete.mockClear();
+
+      await service.deleteMe('user-id');
+
+      expect(mockStorage.delete).not.toHaveBeenCalled();
+    });
+
+    it('log user.delete avec le pseudo réel avant anonymisation', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ ...baseUser });
+
+      await service.deleteMe('user-id');
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.USER_DELETE,
+        'user-id',
+        expect.objectContaining({ pseudo: 'alice' }),
+      );
+    });
+  });
+
+  // --- exportMe() ---
+
+  describe('exportMe()', () => {
+    it('retourne profile + wishes + donations_made + donations_received', async () => {
+      const user: Partial<User> = {
+        id: 'user-id',
+        email: 'alice@test.com',
+        pseudo: 'alice',
+        birthdate: null,
+        grade: 'etincelle',
+        glow_points: 10,
+        created_at: new Date('2025-01-01'),
+      };
+      const wishes = [{ id: 'wish-1', title: 'Wish 1' }];
+      const donationsMade = [{ id: 'don-1' }];
+      const donationsReceived = [{ id: 'don-2' }];
+
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockWishRepo.find.mockResolvedValue(wishes);
+      mockDonationRepo.find.mockResolvedValue(donationsMade);
+
+      const mockQb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        withDeleted: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue(donationsReceived),
+      };
+      mockDonationRepo.createQueryBuilder.mockReturnValue(mockQb);
+
+      const result = await service.exportMe('user-id');
+
+      expect(result.profile).toEqual({
+        id: 'user-id',
+        email: 'alice@test.com',
+        pseudo: 'alice',
+        birthdate: null,
+        grade: 'etincelle',
+        glow_points: 10,
+        created_at: user.created_at,
+      });
+      expect(result.wishes).toEqual(wishes);
+      expect(result.donations_made).toEqual(donationsMade);
+      expect(result.donations_received).toEqual(donationsReceived);
+    });
+
+    it('log user.export', async () => {
+      const user: Partial<User> = {
+        id: 'user-id', email: 'alice@test.com', pseudo: 'alice',
+        birthdate: null, grade: 'etincelle', glow_points: 0, created_at: new Date(),
+      };
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockWishRepo.find.mockResolvedValue([]);
+      mockDonationRepo.find.mockResolvedValue([]);
+      const mockQb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        withDeleted: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      };
+      mockDonationRepo.createQueryBuilder.mockReturnValue(mockQb);
+
+      await service.exportMe('user-id');
+
+      expect(mockEventService.log).toHaveBeenCalledWith(EventType.USER_EXPORT, 'user-id', {});
+    });
+  });
+
+  // --- search() ---
+
+  describe('search()', () => {
+    const buildQb = (results: object[]) => ({
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue(results),
+    });
+
+    it('retourne les utilisateurs dont le pseudo contient le mot', async () => {
+      const mockUser = { id: 'u1', pseudo: 'alice', avatar_url: null, grade: 'etincelle', glow_points: 10 };
+      const mockQb = buildQb([mockUser]);
+      mockUserRepo.createQueryBuilder.mockReturnValue(mockQb);
+
+      const result = await service.search('alice');
+
+      expect(result).toEqual([mockUser]);
+      expect(mockQb.andWhere).toHaveBeenCalledWith('user.pseudo ILIKE :w0', { w0: '%alice%' });
+    });
+
+    it('retourne [] si q est vide', async () => {
+      const result = await service.search('');
+      expect(result).toEqual([]);
+    });
+
+    it('applique un ILIKE par mot en AND pour une recherche multi-mots', async () => {
+      const mockQb = buildQb([]);
+      mockUserRepo.createQueryBuilder.mockReturnValue(mockQb);
+
+      await service.search('ali ce');
+
+      expect(mockQb.andWhere).toHaveBeenCalledWith('user.pseudo ILIKE :w0', { w0: '%ali%' });
+      expect(mockQb.andWhere).toHaveBeenCalledWith('user.pseudo ILIKE :w1', { w1: '%ce%' });
     });
   });
 });

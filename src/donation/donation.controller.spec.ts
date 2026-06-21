@@ -84,7 +84,6 @@ describe('DonationController', () => {
           id: 'don-1',
           wish: { id: 'wish-uuid', title: 'Un vélo' },
           type: DonationType.FINANCIAL,
-          is_anonymous: false,
           status: DonationStatus.PENDING,
         },
       ];

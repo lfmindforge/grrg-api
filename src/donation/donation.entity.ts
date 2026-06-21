@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
@@ -41,9 +42,6 @@ export class Donation {
   @Column({ type: 'text', nullable: true })
   nature_description!: string | null;
 
-  @Column({ default: false })
-  is_anonymous!: boolean;
-
   @Column({
     type: 'enum',
     enum: DonationStatus,
@@ -53,6 +51,9 @@ export class Donation {
 
   @CreateDateColumn()
   created_at!: Date;
+
+  @DeleteDateColumn()
+  deleted_at!: Date | null;
 
   // Relation inverse — chargeable via relations: { evaluation: true }
   @OneToOne(() => Evaluation, (evaluation) => evaluation.donation, {

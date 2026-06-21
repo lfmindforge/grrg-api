@@ -8,7 +8,6 @@ export class DonationResponseDto {
   type!: DonationType;
   amount!: number | null;
   nature_description!: string | null;
-  is_anonymous!: boolean;
   status!: DonationStatus;
   created_at!: Date;
 }

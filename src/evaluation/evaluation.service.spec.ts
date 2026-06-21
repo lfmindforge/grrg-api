@@ -22,6 +22,10 @@ import { DonationType, WishStatus } from '../wish/wish.types';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import { GlowService } from '../common/glow.service';
 import { NotificationService } from '../notifications/notification.service';
+import { BadgeService } from '../badge/badge.service';
+import { BadgeType } from '../badge/badge.types';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 
 describe('EvaluationService', () => {
   let service: EvaluationService;
@@ -41,7 +45,9 @@ describe('EvaluationService', () => {
     computeGrade: jest.Mock;
     getGradeProgression: jest.Mock;
   };
-  let notificationService: { create: jest.Mock };
+  let notificationService: { notify: jest.Mock };
+  let badgeService: { award: jest.Mock };
+  let mockEventService: { log: jest.Mock };
 
   const RECEIVER_ID = 'receiver-uuid';
   const DONOR_ID = 'donor-uuid';
@@ -52,7 +58,6 @@ describe('EvaluationService', () => {
     id: DONATION_ID,
     donor_id: DONOR_ID,
     type: DonationType.DELIVERY,
-    is_anonymous: false,
     status: DonationStatus.COMPLETED,
     wish: {
       id: WISH_ID,
@@ -111,7 +116,9 @@ describe('EvaluationService', () => {
         donsManquants: 4,
       }),
     };
-    notificationService = { create: jest.fn().mockResolvedValue({}) };
+    notificationService = { notify: jest.fn().mockResolvedValue(undefined) };
+    badgeService = { award: jest.fn().mockResolvedValue(undefined) };
+    mockEventService = { log: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -124,6 +131,8 @@ describe('EvaluationService', () => {
         { provide: ConfigService, useValue: config },
         { provide: GlowService, useValue: glowService },
         { provide: NotificationService, useValue: notificationService },
+        { provide: BadgeService, useValue: badgeService },
+        { provide: EventLogService, useValue: mockEventService },
       ],
     }).compile();
 
@@ -162,7 +171,6 @@ describe('EvaluationService', () => {
       expect(glowService.computeGlow).toHaveBeenCalledWith(
         baseDto.satisfaction,
         baseDto.bonus,
-        false,
         DonationType.DELIVERY,
       );
       expect(evaluationRepo.save).toHaveBeenCalled();
@@ -175,66 +183,68 @@ describe('EvaluationService', () => {
       expect(result.glow_awarded).toBe(30);
     });
 
-    it('crée une notification evaluation_received quand le grade ne change pas', async () => {
-      donationRepo.findOne.mockResolvedValue(mockDonation); // donor.grade = 'etincelle'
-      evaluationRepo.findOne.mockResolvedValue(null);
-      config.getOrThrow.mockReturnValue('evaluations-proof');
-      supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
-      evaluationRepo.create.mockReturnValue(mockEvaluation);
-      evaluationRepo.save.mockResolvedValue(mockEvaluation);
-      userRepo.findOne.mockResolvedValue({ ...mockDonor }); // grade: 'etincelle'
-      evaluationRepo.count.mockResolvedValue(1);
-      glowService.computeGrade.mockReturnValue('etincelle'); // même grade → pas de montée
-      userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
-      wishRepo.save.mockResolvedValue({});
-
-      await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
-
-      expect(notificationService.create).toHaveBeenCalledWith(
-        DONOR_ID,
-        'evaluation_received',
-        expect.objectContaining({ glowAwarded: 30, currentGrade: 'etincelle' }),
-      );
-    });
-
-    it('crée une notification grade_up quand le grade change', async () => {
-      const donorAtEtincelle = {
-        ...mockDonor,
-        grade: 'etincelle',
-        glow_points: 80,
-      };
+    it('envoie evaluation_received au donateur avec glow_awarded et pseudo du receveur', async () => {
       donationRepo.findOne.mockResolvedValue(mockDonation);
       evaluationRepo.findOne.mockResolvedValue(null);
       config.getOrThrow.mockReturnValue('evaluations-proof');
       supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
       evaluationRepo.create.mockReturnValue(mockEvaluation);
       evaluationRepo.save.mockResolvedValue(mockEvaluation);
-      userRepo.findOne.mockResolvedValue({ ...donorAtEtincelle });
-      evaluationRepo.count.mockResolvedValue(5); // 5ème don → lumiere
-      glowService.computeGrade.mockReturnValue('lumiere'); // nouveau grade
-      glowService.getGradeProgression.mockReturnValue({
-        currentGrade: 'lumiere',
-        nextGrade: 'eclat',
-        donsManquants: 15,
-      });
-      userRepo.save.mockResolvedValue({
-        ...donorAtEtincelle,
-        glow_points: 110,
-        grade: 'lumiere',
-      });
+      userRepo.findOne.mockResolvedValue({ ...mockDonor, pseudo: 'Receiver' });
+      evaluationRepo.count.mockResolvedValue(1);
+      glowService.computeGrade.mockReturnValue('etincelle');
+      userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
       wishRepo.save.mockResolvedValue({});
 
       await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
 
-      expect(notificationService.create).toHaveBeenCalledWith(
+      expect(notificationService.notify).toHaveBeenCalledWith(
+        DONOR_ID,
+        'evaluation_received',
+        expect.objectContaining({ glow_awarded: 30, recipient_pseudo: 'Receiver', wish_id: WISH_ID }),
+      );
+    });
+
+    it('envoie grade_up en plus de evaluation_received si le grade change', async () => {
+      const donorAtEtincelle = { ...mockDonor, grade: 'etincelle', glow_points: 80 };
+      donationRepo.findOne.mockResolvedValue(mockDonation);
+      evaluationRepo.findOne.mockResolvedValue(null);
+      config.getOrThrow.mockReturnValue('evaluations-proof');
+      supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
+      evaluationRepo.create.mockReturnValue(mockEvaluation);
+      evaluationRepo.save.mockResolvedValue(mockEvaluation);
+      userRepo.findOne.mockResolvedValue({ ...donorAtEtincelle, pseudo: 'Receiver' });
+      evaluationRepo.count.mockResolvedValue(5);
+      glowService.computeGrade.mockReturnValue('lumiere');
+      userRepo.save.mockResolvedValue({ ...donorAtEtincelle, glow_points: 110, grade: 'lumiere' });
+      wishRepo.save.mockResolvedValue({});
+
+      await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
+
+      expect(notificationService.notify).toHaveBeenCalledWith(
         DONOR_ID,
         'grade_up',
-        expect.objectContaining({
-          currentGrade: 'lumiere',
-          nextGrade: 'eclat',
-          donsManquants: 15,
-        }),
+        expect.objectContaining({ grade: 'lumiere', previous_grade: 'etincelle' }),
       );
+    });
+
+    it("n'envoie pas grade_up si le grade n'a pas changé", async () => {
+      donationRepo.findOne.mockResolvedValue(mockDonation);
+      evaluationRepo.findOne.mockResolvedValue(null);
+      config.getOrThrow.mockReturnValue('evaluations-proof');
+      supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
+      evaluationRepo.create.mockReturnValue(mockEvaluation);
+      evaluationRepo.save.mockResolvedValue(mockEvaluation);
+      userRepo.findOne.mockResolvedValue({ ...mockDonor, pseudo: 'Receiver' });
+      evaluationRepo.count.mockResolvedValue(1);
+      glowService.computeGrade.mockReturnValue('etincelle'); // même grade
+      userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
+      wishRepo.save.mockResolvedValue({});
+
+      await service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, mockFile);
+
+      const gradeCalls = notificationService.notify.mock.calls.filter((c: unknown[]) => c[1] === 'grade_up');
+      expect(gradeCalls).toHaveLength(0);
     });
 
     it('lève NotFoundException si la donation est introuvable', async () => {
@@ -297,6 +307,82 @@ describe('EvaluationService', () => {
       await expect(
         service.evaluate(RECEIVER_ID, DONATION_ID, baseDto, undefined),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('evaluate() — badges', () => {
+    beforeEach(() => {
+      donationRepo.findOne.mockResolvedValue({ ...mockDonation });
+      evaluationRepo.findOne.mockResolvedValue(null);
+      config.getOrThrow.mockReturnValue('evaluations-proof');
+      supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
+      evaluationRepo.create.mockReturnValue({ ...mockEvaluation });
+      evaluationRepo.save.mockResolvedValue({ ...mockEvaluation });
+      userRepo.findOne.mockResolvedValue({ ...mockDonor });
+      evaluationRepo.count.mockResolvedValue(1);
+      userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
+      wishRepo.save.mockResolvedValue({});
+      notificationService.notify.mockResolvedValue(undefined);
+    });
+
+    it('attribue most_improbable_wish si went_above_and_beyond + thrilled', async () => {
+      const dto: CreateEvaluationDto = {
+        satisfaction: EvaluationSatisfaction.THRILLED,
+        bonus: EvaluationBonus.WENT_ABOVE_AND_BEYOND,
+        description: 'Incroyable',
+      };
+      evaluationRepo.save.mockResolvedValue({
+        ...mockEvaluation,
+        bonus: EvaluationBonus.WENT_ABOVE_AND_BEYOND,
+        satisfaction: EvaluationSatisfaction.THRILLED,
+      });
+
+      await service.evaluate(RECEIVER_ID, DONATION_ID, dto, mockFile);
+
+      expect(badgeService.award).toHaveBeenCalledWith(DONOR_ID, BadgeType.MOST_IMPROBABLE_WISH);
+    });
+
+    it("n'attribue pas most_improbable_wish si satisfaction < thrilled", async () => {
+      const dto: CreateEvaluationDto = {
+        satisfaction: EvaluationSatisfaction.HAPPY,
+        bonus: EvaluationBonus.WENT_ABOVE_AND_BEYOND,
+        description: 'Bien',
+      };
+      evaluationRepo.save.mockResolvedValue({
+        ...mockEvaluation,
+        bonus: EvaluationBonus.WENT_ABOVE_AND_BEYOND,
+        satisfaction: EvaluationSatisfaction.HAPPY,
+      });
+
+      await service.evaluate(RECEIVER_ID, DONATION_ID, dto, mockFile);
+
+      expect(badgeService.award).not.toHaveBeenCalledWith(DONOR_ID, BadgeType.MOST_IMPROBABLE_WISH);
+    });
+  });
+
+  // --- événements ---
+
+  describe('événements EventLog', () => {
+    it('log EVALUATION_CREATE avec satisfaction et glow_awarded', async () => {
+      const dto: CreateEvaluationDto = { satisfaction: EvaluationSatisfaction.HAPPY, description: 'Super', bonus: EvaluationBonus.ON_TIME };
+      donationRepo.findOne.mockResolvedValue(mockDonation);
+      evaluationRepo.findOne.mockResolvedValue(null);
+      config.getOrThrow.mockReturnValue('evaluations-proof');
+      supabaseStorage.upload.mockResolvedValue('https://storage.url/proof.jpg');
+      evaluationRepo.create.mockReturnValue(mockEvaluation);
+      evaluationRepo.save.mockResolvedValue(mockEvaluation);
+      userRepo.findOne.mockResolvedValue({ ...mockDonor });
+      evaluationRepo.count.mockResolvedValue(1);
+      userRepo.save.mockResolvedValue({ ...mockDonor, glow_points: 130 });
+      wishRepo.save.mockResolvedValue({});
+
+      await service.evaluate(RECEIVER_ID, DONATION_ID, dto, mockFile);
+
+      expect(mockEventService.log).toHaveBeenCalledWith(
+        EventType.EVALUATION_CREATE,
+        RECEIVER_ID,
+        expect.objectContaining({ donation_id: DONATION_ID, satisfaction: EvaluationSatisfaction.HAPPY, glow_awarded: 30, wish_id: WISH_ID }),
+      );
     });
   });
 });

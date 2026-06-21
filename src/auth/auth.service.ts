@@ -14,6 +14,8 @@ import { randomUUID, randomBytes } from 'crypto';
 import { Repository } from 'typeorm';
 import { LoginDto } from './dto/login.dto';
 import { RefreshToken } from './entities/refresh-token.entity';
+import { EventLogService } from '../event-log/event-log.service';
+import { EventType } from '../event-log/event-log.types';
 //type auto de la lib ms utilisé par la lib jwt permet de typer correctement les string représentant des durées. car la lib ms parse ces string.
 import type { StringValue } from 'ms';
 
@@ -25,6 +27,7 @@ export class AuthService {
     private readonly config: ConfigService,
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepo: Repository<RefreshToken>,
+    private readonly eventService: EventLogService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -55,7 +58,10 @@ export class AuthService {
       password_hash,
       pseudo: dto.pseudo,
       birthdate,
+      region: dto.region?.trim() || null,
     });
+
+    await this.eventService.log(EventType.USER_REGISTER, user.id, { pseudo: user.pseudo, method: 'email' });
 
     // Exclure le mot de passe de la réponse et copie le reste
     const { password_hash: _, ...publicUser } = user;
@@ -66,13 +72,19 @@ export class AuthService {
     dto: LoginDto,
   ): Promise<{ access_token: string; refresh_token: string }> {
     const user = await this.userService.findByEmail(dto.email);
-    if (!user || !user.password_hash)
+    if (!user || !user.password_hash) {
+      await this.eventService.log(EventType.USER_LOGIN_FAILED, null, { email: dto.email });
       throw new UnauthorizedException('Invalid credentials');
+    }
 
     const valid = await bcrypt.compare(dto.password, user.password_hash);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    if (!valid) {
+      await this.eventService.log(EventType.USER_LOGIN_FAILED, user.id, { email: dto.email });
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
-    return this.generateTokens(user.id, user.email);
+    await this.eventService.log(EventType.USER_LOGIN, user.id, { method: 'email' });
+    return this.generateTokens(user.id, user.email, user.role);
   }
 
   async refresh(
@@ -95,7 +107,11 @@ export class AuthService {
 
     // Rotation: révoque l'ancien jti, émet deux nouveaux tokens
     await this.refreshTokenRepo.delete({ id: payload.jti });
-    return this.generateTokens(payload.sub, payload.email);
+
+    // Aller DB pour récupérer le rôle courant — garantit qu'un changement de rôle prend effet au prochain refresh
+    const user = await this.userService.findById(payload.sub);
+    if (!user) throw new UnauthorizedException('User not found');
+    return this.generateTokens(user.id, user.email, user.role);
   }
 
   /**  La colonne est stockée en DB mais lors du refresh(), seul findOne({ id: jti }) est vérifié. L'expiration est déjà
@@ -106,16 +122,17 @@ export class AuthService {
   mieux vaut crasher au boot que d'avoir une erreur silencieuse en production. */
 
   async logout(token: string): Promise<void> {
-    let payload: { jti: string };
+    let payload: { jti: string; sub: string };
     try {
       payload = this.jwtService.verify(token, {
         secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
       });
     } catch {
-      // Token invalide ou expiré: rien à révoqué, logout réussi.
+      // Token invalide ou expiré: rien à révoquer, logout réussi.
       return;
     }
     await this.refreshTokenRepo.delete({ id: payload.jti });
+    void this.eventService.log(EventType.USER_LOGOUT, payload.sub, {});
   }
 
   async findOrCreateOAuthUser(profile: {
@@ -132,7 +149,10 @@ export class AuthService {
       profile.provider,
       profile.oauthId,
     );
-    if (existing) return this.generateTokens(existing.id, existing.email);
+    if (existing) {
+      await this.eventService.log(EventType.USER_LOGIN_OAUTH, existing.id, { provider: profile.provider });
+      return this.generateTokens(existing.id, existing.email, existing.role);
+    }
 
     // Cas 2 : email déjà utilisé par un compte email/mot de passe
     const byEmail = await this.userService.findByEmail(email);
@@ -152,7 +172,9 @@ export class AuthService {
       oauth_provider: profile.provider,
       oauth_id: profile.oauthId,
     });
-    return this.generateTokens(user.id, user.email);
+    await this.eventService.log(EventType.USER_REGISTER, user.id, { pseudo: user.pseudo, method: profile.provider });
+    await this.eventService.log(EventType.USER_LOGIN_OAUTH, user.id, { provider: profile.provider });
+    return this.generateTokens(user.id, user.email, user.role);
   }
 
   // Génère un pseudo depuis le displayName OAuth avec suffixe hex pour garantir l'unicité
@@ -171,6 +193,7 @@ export class AuthService {
   private async generateTokens(
     userId: string,
     email: string,
+    role: string,
   ): Promise<{ access_token: string; refresh_token: string }> {
     const jti = randomUUID();
     const expiresAt = new Date(
@@ -180,7 +203,7 @@ export class AuthService {
 
     const [access_token, refresh_token] = await Promise.all([
       this.jwtService.signAsync(
-        { sub: userId, email },
+        { sub: userId, email, role },
         {
           secret: this.config.getOrThrow<string>('JWT_SECRET'),
           expiresIn: this.config.getOrThrow<StringValue>(
